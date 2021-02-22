@@ -1,5 +1,5 @@
-This is a training tool intended to promote muscle memory for finding notes on
-the frets of a bass.
+bassBot is a training tool intended to promote muscle memory for finding notes
+on the frets of a bass.
 
 ********************************************************************************
 INSTALLATION
