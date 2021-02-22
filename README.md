@@ -22,33 +22,38 @@ which are necessary for the aubio module:
     # brew [osx]
     brew install aubio --with-python
 
-The above instructions are from https://aubio.org/manual/latest/installing.html,
-which should be the point of reference for diagnosing any installation issue.
+Next, pyAudio will needo to be installed:
+    # .deb (debian, ubuntu) [linux]
+    sudo apt-get install python-pyaudio
 
-Once aubio is installed, use pip to install the following additional required
-modules:
-    aubio
-    audioPy
+The above commands should result in all dependent modules being installed.  In
+case something is missing, you can try using pip to install them instead:
+    pip install aubio pyAudio
 
-The preferred method for installing these modules is pip.  To check if pip is
-installed in your enviornment:
-    $ python -m pip --version
+However, odds are that you are going to run into problems using pip, as aubio
+and pyAudio all require some external packages (on Ubuntu at least), so google
+will unfortunately be your best bet to installing these dependencies.
 
-Which should return something like:
-    pip X.Y.Z from .../site-packages/pip (python X.Y)
-
-If you do not have pip installed, use the following to install it:
-https://pip.pypa.io/en/stable/installing/
-
-Once pip is in place, the dependent packages for this program can be obtained
-using:
-    pip install aubio pyaudio
-
-Once that is complete, bassbot.py can be run either as its own executable:
+********************************************************************************
+Operation
+********************************************************************************
+Once install is complete, bassBot can be run either as its own executable:
     ./bassBot.py
 
 Or by invoking a specific python installation:
     python ./bassBot.py
 
+Without modifications, bassbot will use the default system input as the audio
+source.  By default, it will run with level 0 and no verbosity.  This can be
+changed by using the -l flag to increase level:
+    ./bassBot.py -l 1
+    ./bassBot.py -l 2
 
+Or the -v and --vv flags:
+    ./bassBot.py -l 1 -v
+    ./bassBot.py -l 0 --vv
+
+-v and --vv don't do anything at present, but I'll be pushing a change shortly
+to have them run a debug loop, will just print out the note and volume detected
+by the audio processing loop (with no levels enabled).
 
