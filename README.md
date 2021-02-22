@@ -23,11 +23,13 @@ which are necessary for the aubio module:
     brew install aubio --with-python
 
 Next, pyAudio will needo to be installed:
+
     # .deb (debian, ubuntu) [linux]
     sudo apt-get install python-pyaudio
 
 The above commands should result in all dependent modules being installed.  In
 case something is missing, you can try using pip to install them instead:
+
     pip install aubio pyAudio
 
 However, odds are that you are going to run into problems using pip, as aubio
@@ -38,18 +40,22 @@ will unfortunately be your best bet to installing these dependencies.
 OPERATION
 ********************************************************************************
 Once install is complete, bassBot can be run either as its own executable:
+
     ./bassBot.py
 
 Or by invoking a specific python installation:
+
     python ./bassBot.py
 
 Without modifications, bassbot will use the default system input as the audio
 source.  By default, it will run with level 0 and no verbosity.  This can be
 changed by using the -l flag to increase level:
+
     ./bassBot.py -l 1
     ./bassBot.py -l 2
 
 Or the -v and --vv flags:
+
     ./bassBot.py -l 1 -v
     ./bassBot.py -l 0 --vv
 
