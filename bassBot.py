@@ -33,13 +33,15 @@ STRING_LIST = 'E, A, D, G'.split()
 # so [0][3] will give you the E string, fret 3, or an G1
 STRING_FRET_LIST = [E_NOTES, A_NOTES, D_NOTES, G_NOTES]
 
-
+# some functions I found from a ukelele tuner app, all of which are based on
+# https://newt.phys.unsw.edu.au/jw/notes.html
+# These are used to convert frequencies to midi numbers and note names
 def freq_to_number(f): return 69 + 12*num.log2(f/440.0)
 def number_to_freq(n): return 440 * 2.0**((n-69)/12.0)
 def note_name(n): return NOTE_NAMES[n % 12] + str(n/12 - 1)
 
-# Some constants for setting the PyAudio and the
-# Aubio.
+# Some constants for setting the PyAudio capture and aubio note detection
+# parameters
 BUFFER_SIZE             = 4096*2
 CHANNELS                = 1
 FORMAT                  = pyaudio.paFloat32
@@ -47,6 +49,7 @@ METHOD                  = "default"
 SAMPLE_RATE             = 44100
 HOP_SIZE                = BUFFER_SIZE//2
 PERIOD_SIZE_IN_FRAME    = HOP_SIZE
+
 
 class AudioHandler:
     """Set up mic input, take samples when tick is called, provide freq and vol"""
@@ -79,19 +82,15 @@ class AudioHandler:
         # of the current frame.
         volume = num.sum(samples**2)/len(samples)
         return pitch, volume
-        #if volume > 0.001:
-        #    # Get note number and nearest note
-        #    n = freq_to_number(pitch)
-        #    n0 = int(round(n))
-#
-#
-        #    # Format the volume output so it only
-        #    # displays at most six numbers behind 0.
-        #    volume = "{:6f}".format(volume)
-#
-        #    # Finally print the pitch and the volume.
-        #    print(note_name(n0) + " " + str(pitch) + " " + str(volume))
 
+# This will process the audio on the input stream.  It will block until a note
+# is detected with a sufficient degree of confidence, then return the name of
+# that note.
+#
+# CONFIDENCE_LEVEL is used to determine how many consecutive readings of a note
+# must be received before returning.  This is to prevent stray sharps and flats
+# from being returned, as I normally see one sample worth of junk before the
+# processAudio() function returns the correct result.
 def waitForNote(aHandler):
     resultList = []
     CONFIDENCE_LEVEL = 5
@@ -120,6 +119,12 @@ def waitForNote(aHandler):
                 return noteName
             resultList.pop()
 
+# This will process the audio and return once it is confident that the user has
+# muted their strings.
+#
+# Similar to waitForNote, this function will wait for CONFIDENCE_LEVEL
+# consecutive samples returning that nothing is breaking the noise floor before
+# returning.
 def waitForMute(aHandler):
     pitchList = []
     CONFIDENCE_LEVEL = 5
@@ -142,18 +147,31 @@ def waitForMute(aHandler):
                 return
             pitchList.pop()
 
+# This function will handle all "Find the fret of the note" style levels.
+# Currently:
+#   Level 0: Play an open string E, A, D, or G.  Useful for novices who don't
+#            have which string is which memorized yet.
+#   Level 1: Play a given note on a given string, limited to the 4th fret.
+#   Level 2: Play a given note on a given string, limited to the 12th fret
+#   Level 3: Play a given note on a given string, limited to the 18th fret
+# This function will return the amount of time it took the user to find the note
 def fretFinder(aHandler, level):
     result = False
 
+    # Start the timer to count how long the user takes
     start_time = datetime.datetime.now()
-    # Repeat until key press
+
     # Select a random string, 1-4
     string = random.randrange(4)
+
+    # Select the fret for that string
     if (level == 0):
         fret = random.randrange(5)
         prefix = ''
     elif (level == 1):
         fret = random.randrange(13)
+        # Any mode with fret 12 or higher in play needs a high/low prefix to
+        # differentiate between open string and the 12th+ fret
         if fret >= 12:
             prefix = 'high '
         else:
@@ -164,6 +182,8 @@ def fretFinder(aHandler, level):
             prefix = 'high '
         else:
             prefix = 'low '
+
+    #If the user gets it wrong, ask for that same note until they get it right
     while result == False:
         toPlay = STRING_FRET_LIST[string][fret]
         print(STRING_LIST[string] + " string: " + prefix + toPlay)
@@ -183,15 +203,16 @@ def fretFinder(aHandler, level):
         waitForMute(aHandler)
 
     return elapsed_time
-    #print("muted")
 
-    # Select a random fret, 1-5
-    # prompt user for note by indexing into string and fret arrays
-    # invoke wait for input
-
+# Main
+# does main stuff
 def main(args):
-    aHandler = AudioHandler()
 
+    # initialize the audio interface
+    aHandler = AudioHandler()
+    resultList = []
+
+    # handle argument parsing, because we don't need no stinkin gui
     parser = argparse.ArgumentParser(description='bot some bass')
     parser.add_argument("--verbose", "-v", help="increase output verbosity",
                     action="store_true")
@@ -200,7 +221,6 @@ def main(args):
     parser.add_argument('-l', dest='level', default=0, action='store', type=int)
     args = parser.parse_args()
     level = args.level
-    resultList = []
 
     if level == 0:
         print("Level 0: Play the note listed!")
@@ -212,12 +232,15 @@ def main(args):
         print("Level 2: Play the note listed!")
         print("  ... but we're sticking below " + str(NUM_FRETS) + " frets")
     else:
-        print("cheeky little snit... you get level 0.")
+        print("well aren't we cheeky... you get level 0.")
         level = 0
 
     while True:
+        # Run until the user control+c's
         try:
             if (args.vverbose):
+                # In vverbose mode, just print what the user's playing so they
+                # can validate system sanity
                 result = aHandler.processAudio()
                 pitch = result[0]
                 volume = result[1]
@@ -236,34 +259,16 @@ def main(args):
                     # Finally print the pitch and the volume.
                     print(name + " " + str(pitch) + " " + str(volume))
             else:
+                # Eventually, split this out with some if statements for whether
+                # it's a fretFinder or shapeFinder level
                 result = fretFinder(aHandler, level)
                 resultList.append(result)
-                #raw_input()
                 continue
         except KeyboardInterrupt:
+            # Print diags
             print("Session complete!")
-            print("Average time: " + str(sum(resultList) / len(resultList)) + " seconds")
+            if len(resultList) != 0:
+                print("Average time: " + str(sum(resultList) / len(resultList)) + " seconds")
             return
-        #result = aHandler.processAudio()
-        #pitch = result[0]
-        #volume = result[1]
-        #if (args.vverbose) or ((args.verbose and volume > 0.001)):
-        #    # Get note number and nearest note
-        #    if (pitch == 0.0):
-        #        #print "n = " + str(n)
-        #        #print "pitch = " + str(pitch)
-        #        name = "none"
-        #    else:
-        #        n = freq_to_number(pitch)
-        #        n0 = int(round(n))
-        #        name = note_name(n0)
-#
-        #    # Format the volume output so it only
-        #    # displays at most six numbers behind 0.
-        #    volume = "{:6f}".format(volume)
-        #    # Finally print the pitch and the volume.
-        #    print(name + " " + str(pitch) + " " + str(volume))
-
-
 
 if __name__ == "__main__": main(sys.argv)
