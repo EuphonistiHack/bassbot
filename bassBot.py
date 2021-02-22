@@ -217,10 +217,29 @@ def main(args):
 
     while True:
         try:
-            result = fretFinder(aHandler, level)
-            resultList.append(result)
-            #raw_input()
-            continue
+            if (args.vverbose):
+                result = aHandler.processAudio()
+                pitch = result[0]
+                volume = result[1]
+                if (args.vverbose) or ((args.verbose and volume > 0.001)):
+                    # Get note number and nearest note
+                    if (pitch == 0.0):
+                        name = "none"
+                    else:
+                        n = freq_to_number(pitch)
+                        n0 = int(round(n))
+                        name = note_name(n0)
+
+                    # Format the volume output so it only
+                    # displays at most six numbers behind 0.
+                    volume = "{:6f}".format(volume)
+                    # Finally print the pitch and the volume.
+                    print(name + " " + str(pitch) + " " + str(volume))
+            else:
+                result = fretFinder(aHandler, level)
+                resultList.append(result)
+                #raw_input()
+                continue
         except KeyboardInterrupt:
             print("Session complete!")
             print("Average time: " + str(sum(resultList) / len(resultList)) + " seconds")

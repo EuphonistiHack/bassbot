@@ -53,7 +53,11 @@ Or the -v and --vv flags:
     ./bassBot.py -l 1 -v
     ./bassBot.py -l 0 --vv
 
--v and --vv don't do anything at present, but I'll be pushing a change shortly
-to have them run a debug loop, will just print out the note and volume detected
-by the audio processing loop (with no levels enabled).
+-v doesn't do much at the moment.
+--vv will override any level selection and instead run a diagnostic program.
+This will go through the audio processing loop and print out the note recognized
+and the volume detected for the note.  It is recommended that this be run before
+using bassBot, as you will need to have a good enough single to get five
+consecutive readings of a given note in order for the audio processing loop to
+register a valid reading.
 
