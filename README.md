@@ -35,7 +35,7 @@ and pyAudio all require some external packages (on Ubuntu at least), so google
 will unfortunately be your best bet to installing these dependencies.
 
 ********************************************************************************
-Operation
+OPERATION
 ********************************************************************************
 Once install is complete, bassBot can be run either as its own executable:
     ./bassBot.py
