@@ -27,7 +27,13 @@ Next, pyAudio will needo to be installed:
     # .deb (debian, ubuntu) [linux]
     sudo apt-get install python-pyaudio
 
-Finally, playsound needs to be installed:
+If you are running on Windows, then you'll need to follow the instructions at
+the following link to install pyaudio.  I'm still working on cross platform
+support, so this one might be janky for a while :(
+
+    https://thetechinfinite.com/2020/07/14/how-to-install-pyaudio-module-in-python-3-0-in-windows/
+
+The last package to install will be playsound:
 
     pip install playsound
 

@@ -178,6 +178,9 @@ def waitForMute(aHandler):
                 return
             pitchList.pop()
 
+#TODO: move the string, fret, order parameters out of the chordFinder function.
+#      It feels ugly having level if's in the main call and in each finder
+#      function- the level parameters should be passed into these fxns instead
 def chordFinder(aHandler, level):
     result = False
     chordTones = []
@@ -191,11 +194,37 @@ def chordFinder(aHandler, level):
     if level == 4:
         string = 0
         fret = 8
+        order = [0, 1, 2, 3, 4, 3, 2, 1, 0]
     elif level == 5:
         # Must be string 0:1
         # Must be fret 2:12, though 12th fret limit is a bit artificial
         string = random.randrange(2)
         fret = 2 + random.randrange(11)
+        order = [0, 1, 2, 3, 4, 3, 2, 1, 0]
+    elif level == 6:
+        string = 0
+        fret = 8
+        order = [0, 1, 2, 3, 4]
+        random.shuffle(order)
+        orderString = ''
+        for i in order:
+            orderString += str(i+1) + " "
+    elif level == 7:
+        string = 0
+        fret = 8
+        order = [0, 1, 2, 3, 4]
+        random.shuffle(order)
+        orderString = ''
+        for i in order:
+            orderString += str(i+1) + " "
+    elif level == 8:
+        string = random.randrange(2)
+        fret = 2 + random.randrange(11)
+        order = [0, 1, 2, 3, 4]
+        random.shuffle(order)
+        orderString = ''
+        for i in order:
+            orderString += str(i+1) + " "
 
     # hi/lo/mid convention:
     # low is anything from C1 to B1.  Mid is anything from C2 to B2.  High is
@@ -215,13 +244,19 @@ def chordFinder(aHandler, level):
         chordRoot = chordRoot[:-1]
 
     # shape selection
-    shape_num = random.randrange(4)
+    if level == 6:
+        shape_num = 0
+    else:
+        shape_num = random.randrange(4)
     shape = SHAPE_LIST[shape_num]
 
     chordTones[0] = STRING_FRET_LIST[string][fret]
     for i in range(1,5):
         chordTones[i] = STRING_FRET_LIST[string+shape[i-1][0]][fret+shape[i-1][1]]
+
     print(SHAPE_NAMES[shape_num] + " " + prefix + chordRoot)
+    if (level == 6):
+        print("order: " + orderString)
     #print("root: " + prefix + chordRoot)
     print('string ' + str(string+1) + ' fret ' + str(fret))
     #print('shape num ' + str(shape_num))
@@ -229,27 +264,8 @@ def chordFinder(aHandler, level):
     #print("tones: " + str(chordTones))
     ignore = ''
 
-    for i in range(5):
-        #If the user gets it wrong, ask for that same note until they get it right
-        while result == False:
-            toPlay = chordTones[i]
-            #print("next note: " + toPlay)
-
-            played = waitForNote(aHandler, ignore)
-            #print('played ' + played)
-            if played == toPlay:
-                result = True
-                print("correct on " + str(i))
-            else:
-                print("wrongzo!")
-                print("   " + str(i) + "heard " + played + " expected " + str(toPlay))
-                playsound(WRONG_SOUND)
-                ignore = played
-        # move on to the next note, but be sure to ignore the current note or
-        # the user will auto-fail
-        ignore = toPlay
-        result = False
-    for i in range(3, -1, -1):
+    #for i in range(5):
+    for i in order:
         #If the user gets it wrong, ask for that same note until they get it right
         while result == False:
             toPlay = chordTones[i]
@@ -349,9 +365,12 @@ def printHelpMessage():
     print("  The answer will be below the 12th fret")
     print("Level 3: Play the note listed, meedly meedly mode!")
     print("  The answer will go up to " + str(NUM_FRETS) + " frets")
-    print("Level 4: Play the chord shape for a middle C")
-    print("Level 5: Play the chord shape for the listed root")
-    print("\nCurrent supported chord shapes for levels 4 and 5 are:")
+    print("Level 4: Play a random chord shape for a middle C")
+    print("Level 5: Play a random chord shape for a random root")
+    print("Level 6: Play a major 7 arpeggio for a middle C in a random order")
+    print("Level 7: Play a random chord shape for a middle C in a random order")
+    print("Level 8: Play a random chord shape for a random root in a random order")
+    print("\nCurrent supported chord shapes for levels 4 - 8 are:")
     for i in SHAPE_NAMES:
         print("   " + i)
 
@@ -376,6 +395,12 @@ def main(args):
 
     print ROBOT
 
+    #TODO: these ifs should track a testFunction (=fretFinder or =chordFinder)
+    #      and store a paramlist based on the level.  The while loop below
+    #      should then instead just invoke testFunction(testParams), as opposed
+    #      to having yet another block of if statements based on the level
+    #      passed in
+
     if level == -1:
         printHelpMessage()
         return
@@ -391,9 +416,15 @@ def main(args):
         print("Level 3: Play the note listed!")
         print("  ... but we're sticking below " + str(NUM_FRETS) + " frets")
     elif level == 4:
-        print("Level 4: Play the chord shape for a middle C")
+        print("Level 4: Play a random chord shape arpeggio for a middle C")
     elif level == 5:
-        print("Level 5: Play the chord shape for the listed root")
+        print("Level 5: Play a random chord shape for a random root")
+    elif level == 6:
+        print("Level 6: Play a major 7 arpeggio for a middle C in a random order")
+    elif level == 7:
+        print("Level 7: Play a random chord shape for a middle C in a random order")
+    elif level == 8:
+        print("Level 8: Play a random chord shape for a random root in a random order")
     else:
         print("well aren't we cheeky... you get level 0.")
         level = 0
