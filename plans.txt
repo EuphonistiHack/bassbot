@@ -1,0 +1,8 @@
+TODO
+    fix python 3 deprecation warnings
+    replace mute strings requirement on fretfinder with new ignore functionality
+
+Phase 1: fret identification
+Phase 2: chord shaping
+Phase 3: GUI
+Phase 4: Distribution!

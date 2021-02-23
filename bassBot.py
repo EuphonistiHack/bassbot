@@ -15,6 +15,7 @@ from threading import Thread, Event
 import argparse
 import random
 import datetime
+from playsound import playsound
 
 NOTE_NAMES = 'C C# D D# E F F# G G# A A# B'.split()
 
@@ -33,6 +34,7 @@ STRING_LIST = 'E A D G'.split()
 # String fret list is used to generate a random note on a random fret.
 # so [0][3] will give you the E string, fret 3, or an G1
 STRING_FRET_LIST = [E_NOTES, A_NOTES, D_NOTES, G_NOTES]
+SHAPE_NAMES = ['major 7', 'dom 7', 'minor 7', 'm7 flat 5']
 
 # The chord shape will give an offset from the root chord in [string][fret]
 # format.  For example, a C major 7 will contain the root note (C), then a note
@@ -41,13 +43,25 @@ STRING_FRET_LIST = [E_NOTES, A_NOTES, D_NOTES, G_NOTES]
 # one string down (B): [2][1], and ending on a note two strings up and two
 # strings down (C): [2][2]
 
-# hi/lo/mid convention:
-# low is anything from B0 to C#2.  Mid is anything from D2 to C#3.  High is
-# anything from
 MAJOR7_SHAPE = [[1,-1], [1,2], [2,1], [2,2]]
 DOM7_SHAPE = [[1,-1], [1,2], [2,0], [2,2]]
 MINOR7_SHAPE = [[1,-2], [1,2], [2,0], [2,2]]
 MINOR7FLAT5_SHAPE = [[1,-2], [1,1], [2,0], [2,2]]
+SHAPE_LIST = [MAJOR7_SHAPE, DOM7_SHAPE, MINOR7_SHAPE, MINOR7FLAT5_SHAPE]
+
+WRONG_SOUND = 'wrongNoise.ogg'
+
+ROBOT = """
+~~~~BASSBOT~~~~
+    \\.===./
+    | n n |
+     \\_`_/
+   .=(+++)=.
+o="  (___)  "=o
+     |_|_|
+     /_|_\\
+~~~~~~~~~~~~~~~
+"""
 
 # some functions I found from a ukelele tuner app, all of which are based on
 # https://newt.phys.unsw.edu.au/jw/notes.html
@@ -65,7 +79,6 @@ METHOD                  = "default"
 SAMPLE_RATE             = 44100
 HOP_SIZE                = BUFFER_SIZE//2
 PERIOD_SIZE_IN_FRAME    = HOP_SIZE
-
 
 class AudioHandler:
     """Set up mic input, take samples when tick is called, provide freq and vol"""
@@ -109,7 +122,7 @@ class AudioHandler:
 # processAudio() function returns the correct result.
 def waitForNote(aHandler, ignore = None):
     resultList = []
-    CONFIDENCE_LEVEL = 5
+    CONFIDENCE_LEVEL = 3
     # invoke processAudio on repeat.
     # Track the results in an array.  If you match 5 in a row, that's the result
     # disregard if volume is 0
@@ -145,7 +158,7 @@ def waitForNote(aHandler, ignore = None):
 # returning.
 def waitForMute(aHandler):
     pitchList = []
-    CONFIDENCE_LEVEL = 5
+    CONFIDENCE_LEVEL = 3
     # invoke processAudio on repeat.
     # Track the results in an array.  If you match 5 in a row, that's the result
     # disregard if volume is 0
@@ -165,30 +178,103 @@ def waitForMute(aHandler):
                 return
             pitchList.pop()
 
-def chordFinder(aHanlder, level):
+def chordFinder(aHandler, level):
     result = False
     chordTones = []
     for i in range(5):
         chordTones.append('')
+
+    #  Start the timer to count how long the user takes
+    start_time = datetime.datetime.now()
+
     #Root selection
-    # Must be string 0:1
-    # Must be fret 2:12, though 12th fret limit is a bit artificial
-    #string = random.randrange(2)
-    #fret = 2 + random.randrange(11)
-    string = 0
-    fret = 8
+    if level == 4:
+        string = 0
+        fret = 8
+    elif level == 5:
+        # Must be string 0:1
+        # Must be fret 2:12, though 12th fret limit is a bit artificial
+        string = random.randrange(2)
+        fret = 2 + random.randrange(11)
 
+    # hi/lo/mid convention:
+    # low is anything from C1 to B1.  Mid is anything from C2 to B2.  High is
+    # anything from C3 to B3.  C4 and C#4 are the devil and don't exist.
+    # I'm not super happy with this, but... I can't think of a better way to do
+    # it, especially when we expand to support 5 string basses later
+    # While we're at it, lets strip the number off the chord name as well.
     chordRoot = STRING_FRET_LIST[string][fret]
+    if chordRoot[-1] == '1':
+        prefix = 'low '
+        chordRoot = chordRoot[:-1]
+    elif chordRoot[-1] == '2':
+        prefix = 'mid '
+        chordRoot = chordRoot[:-1]
+    else:
+        prefix = 'high '
+        chordRoot = chordRoot[:-1]
+
+    # shape selection
+    shape_num = random.randrange(4)
+    shape = SHAPE_LIST[shape_num]
+
     chordTones[0] = STRING_FRET_LIST[string][fret]
-    chordTones[1] = STRING_FRET_LIST[string+MAJOR7_SHAPE[0][0]][fret+MAJOR7_SHAPE[0][1]]
-    chordTones[2] = STRING_FRET_LIST[string+MAJOR7_SHAPE[1][0]][fret+MAJOR7_SHAPE[1][1]]
-    chordTones[3] = STRING_FRET_LIST[string+MAJOR7_SHAPE[2][0]][fret+MAJOR7_SHAPE[2][1]]
-    chordTones[4] = STRING_FRET_LIST[string+MAJOR7_SHAPE[3][0]][fret+MAJOR7_SHAPE[3][1]]
-    print("root: " + chordRoot)
-    print("tones: " + str(chordTones))
+    for i in range(1,5):
+        chordTones[i] = STRING_FRET_LIST[string+shape[i-1][0]][fret+shape[i-1][1]]
+    print(SHAPE_NAMES[shape_num] + " " + prefix + chordRoot)
+    #print("root: " + prefix + chordRoot)
+    print('string ' + str(string+1) + ' fret ' + str(fret))
+    #print('shape num ' + str(shape_num))
+    #print('shape ' + SHAPE_NAMES[shape_num])
+    #print("tones: " + str(chordTones))
+    ignore = ''
 
-    return 0
+    for i in range(5):
+        #If the user gets it wrong, ask for that same note until they get it right
+        while result == False:
+            toPlay = chordTones[i]
+            #print("next note: " + toPlay)
 
+            played = waitForNote(aHandler, ignore)
+            #print('played ' + played)
+            if played == toPlay:
+                result = True
+                print("correct on " + str(i))
+            else:
+                print("wrongzo!")
+                print("   " + str(i) + "heard " + played + " expected " + str(toPlay))
+                playsound(WRONG_SOUND)
+                ignore = played
+        # move on to the next note, but be sure to ignore the current note or
+        # the user will auto-fail
+        ignore = toPlay
+        result = False
+    for i in range(3, -1, -1):
+        #If the user gets it wrong, ask for that same note until they get it right
+        while result == False:
+            toPlay = chordTones[i]
+            #print("next note: " + toPlay)
+
+            played = waitForNote(aHandler, ignore)
+            #print('played ' + played)
+            if played == toPlay:
+                result = True
+                print("correct on " + str(i))
+            else:
+                print("wrongzo!")
+                print("   " + str(i) + "heard " + played + " expected " + str(toPlay))
+                playsound(WRONG_SOUND)
+                ignore = played
+        # move on to the next note, but be sure to ignore the current note or
+        # the user will auto-fail
+        ignore = toPlay
+        result = False
+
+    delta = datetime.datetime.now() - start_time
+    elapsed_time = delta.total_seconds()
+    waitForMute(aHandler)
+
+    return elapsed_time
 
 # This function will handle all "Find the fret of the note" style levels.
 # Currently:
@@ -209,9 +295,12 @@ def fretFinder(aHandler, level):
 
     # Select the fret for that string
     if (level == 0):
-        fret = random.randrange(5)
+        fret = 0
         prefix = ''
     elif (level == 1):
+        fret = random.randrange(5)
+        prefix = ''
+    elif (level == 2):
         fret = random.randrange(13)
         # Any mode with fret 12 or higher in play needs a high/low prefix to
         # differentiate between open string and the 12th+ fret
@@ -219,7 +308,7 @@ def fretFinder(aHandler, level):
             prefix = 'high '
         else:
             prefix = 'low '
-    elif (level == 2):
+    elif (level == 3):
         fret = random.randrange(NUM_FRETS)
         if fret >= 12:
             prefix = 'high '
@@ -242,6 +331,7 @@ def fretFinder(aHandler, level):
             delta = datetime.datetime.now() - start_time
             elapsed_time = delta.total_seconds()
             print("correct!  played " + str(played) + " in " + str(elapsed_time) + " seconds")
+            print("Mute the strings for your next note")
         else:
             print("wrongzo!")
             print("   expected " + str(toPlay) + ', string ' + str(string+1) + ' fret ' + str(fret))
@@ -249,6 +339,21 @@ def fretFinder(aHandler, level):
         waitForMute(aHandler)
 
     return elapsed_time
+
+def printHelpMessage():
+    print("Welcome to bassbot!  Use the -l flag to select from one of the following levels:")
+    print("Level 0: Super-beginner mode! Play the string listed.")
+    print("Level 1: Play the note listed!")
+    print("  The answer will always be on one of the first 4 frets")
+    print("Level 2: Play the note listed!")
+    print("  The answer will be below the 12th fret")
+    print("Level 3: Play the note listed, meedly meedly mode!")
+    print("  The answer will go up to " + str(NUM_FRETS) + " frets")
+    print("Level 4: Play the chord shape for a middle C")
+    print("Level 5: Play the chord shape for the listed root")
+    print("\nCurrent supported chord shapes for levels 4 and 5 are:")
+    for i in SHAPE_NAMES:
+        print("   " + i)
 
 # Main
 # does main stuff
@@ -259,26 +364,36 @@ def main(args):
     resultList = []
 
     # handle argument parsing, because we don't need no stinkin gui
-    parser = argparse.ArgumentParser(description='bot some bass')
+    parser = argparse.ArgumentParser()
     parser.add_argument("--verbose", "-v", help="increase output verbosity",
                     action="store_true")
     parser.add_argument("--vverbose", "-vv", help="increase output verbosity",
                     action="store_true")
-    parser.add_argument('-l', dest='level', default=0, action='store', type=int)
+    parser.add_argument('-l', dest='level', default=-1, action='store', type=int)
     args = parser.parse_args()
     level = args.level
+    verbose = args.verbose
 
-    if level == 0:
-        print("Level 0: Play the note listed!")
-        print("  The answer will always be on one of the first 4 frets")
+    print ROBOT
+
+    if level == -1:
+        printHelpMessage()
+        return
+    elif level == 0:
+        print("Level 0: Play the string listed!")
     elif level == 1:
         print("Level 1: Play the note listed!")
-        print("  ... but we're sticking below 12 frets")
+        print("  The answer will always be on one of the first 4 frets")
     elif level == 2:
         print("Level 2: Play the note listed!")
-        print("  ... but we're sticking below " + str(NUM_FRETS) + " frets")
+        print("  ... but we're sticking below 12 frets")
     elif level == 3:
-        print("experimental!")
+        print("Level 3: Play the note listed!")
+        print("  ... but we're sticking below " + str(NUM_FRETS) + " frets")
+    elif level == 4:
+        print("Level 4: Play the chord shape for a middle C")
+    elif level == 5:
+        print("Level 5: Play the chord shape for the listed root")
     else:
         print("well aren't we cheeky... you get level 0.")
         level = 0
@@ -307,12 +422,12 @@ def main(args):
                     # Finally print the pitch and the volume.
                     print(name + " " + str(pitch) + " " + str(volume))
             else:
-                if level < 3:
+                if level < 4:
                     result = fretFinder(aHandler, level)
                     resultList.append(result)
                 else:
                     result = chordFinder(aHandler, level)
-                    return
+                    resultList.append(result)
                 continue
         except KeyboardInterrupt:
             # Print diags

@@ -27,6 +27,10 @@ Next, pyAudio will needo to be installed:
     # .deb (debian, ubuntu) [linux]
     sudo apt-get install python-pyaudio
 
+Finally, playsound needs to be installed:
+
+    pip install playsound
+
 The above commands should result in all dependent modules being installed.  In
 case something is missing, you can try using pip to install them instead:
 
