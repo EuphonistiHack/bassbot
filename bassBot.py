@@ -23,22 +23,38 @@ NOTE_NAMES = 'C C# D D# E F F# G G# A A# B'.split()
 # ok, so there are more than 18 frets, but who's actually meedly meedlying up
 # in the stratosphere with the 24th fret?
 NUM_FRETS = 18
-E_NOTES = 'E1 F1 F#1 G1 G#1 A1 A#1 B1 C2 C#2 D2 D#2 E2 F2 F#2 G2 G#2 A2 A#2'.split()
-A_NOTES = 'A1 A#1 B1 C2 C#2 D2 D#2 E2 F2 F#2 G2 G#2 A2 A#2 B2 C3 C#3 D3 D#3'.split()
-D_NOTES = 'D2 D#2 E2 F2 F#2 G2 G#2 A2 A#2 B2 C3 C#3 D3 D#3 E3 F3 F#3 G3 G#3'.split()
 G_NOTES = 'G2 G#2 A2 A#2 B2 C3 C#3 D3 D#3 E3 F3 F#3 G3 G#3 A3 A#3 B3 C4 C#4'.split()
+D_NOTES = 'D2 D#2 E2 F2 F#2 G2 G#2 A2 A#2 B2 C3 C#3 D3 D#3 E3 F3 F#3 G3 G#3'.split()
+A_NOTES = 'A1 A#1 B1 C2 C#2 D2 D#2 E2 F2 F#2 G2 G#2 A2 A#2 B2 C3 C#3 D3 D#3'.split()
+E_NOTES = 'E1 F1 F#1 G1 G#1 A1 A#1 B1 C2 C#2 D2 D#2 E2 F2 F#2 G2 G#2 A2 A#2'.split()
+B_NOTES = 'B0 C1 C#1 D1 D#1 E1 F1 F#1 G1 G#1 A1 A#1 B1 C2 C#2 D2 D#2 E2 E#2'.split()
 # String is mostly used to convert string number to name
 STRING_LIST = 'E A D G'.split()
 # String fret list is used to generate a random note on a random fret.
 # so [0][3] will give you the E string, fret 3, or an G1
 STRING_FRET_LIST = [E_NOTES, A_NOTES, D_NOTES, G_NOTES]
 
+# The chord shape will give an offset from the root chord in [string][fret]
+# format.  For example, a C major 7 will contain the root note (C), then a note
+# one string up and one fret down (E) [1][-1], then a note one string up and
+# two strings down from the root (G): [1][2], then a note two strings up and
+# one string down (B): [2][1], and ending on a note two strings up and two
+# strings down (C): [2][2]
+
+# hi/lo/mid convention:
+# low is anything from B0 to C#2.  Mid is anything from D2 to C#3.  High is
+# anything from
+MAJOR7_SHAPE = [[1,-1], [1,2], [2,1], [2,2]]
+DOM7_SHAPE = [[1,-1], [1,2], [2,0], [2,2]]
+MINOR7_SHAPE = [[1,-2], [1,2], [2,0], [2,2]]
+MINOR7FLAT5_SHAPE = [[1,-2], [1,1], [2,0], [2,2]]
+
 # some functions I found from a ukelele tuner app, all of which are based on
 # https://newt.phys.unsw.edu.au/jw/notes.html
 # These are used to convert frequencies to midi numbers and note names
 def freq_to_number(f): return 69 + 12*num.log2(f/440.0)
 def number_to_freq(n): return 440 * 2.0**((n-69)/12.0)
-def note_name(n): return NOTE_NAMES[n % 12] + str(n/12 - 1)
+def note_name(n): return NOTE_NAMES[n % 12] + str(int(n/12 - 1))
 
 # Some constants for setting the PyAudio capture and aubio note detection
 # parameters
@@ -91,7 +107,7 @@ class AudioHandler:
 # must be received before returning.  This is to prevent stray sharps and flats
 # from being returned, as I normally see one sample worth of junk before the
 # processAudio() function returns the correct result.
-def waitForNote(aHandler):
+def waitForNote(aHandler, ignore = None):
     resultList = []
     CONFIDENCE_LEVEL = 5
     # invoke processAudio on repeat.
@@ -108,6 +124,8 @@ def waitForNote(aHandler):
         n = freq_to_number(pitch)
         n0 = int(round(n))
         noteName = note_name(n0)
+        if noteName == ignore:
+            continue
         resultList.insert(0, noteName)
         #print(noteName + " list so far: " + str(resultList))
         if len(resultList) >= CONFIDENCE_LEVEL:
@@ -147,6 +165,31 @@ def waitForMute(aHandler):
                 return
             pitchList.pop()
 
+def chordFinder(aHanlder, level):
+    result = False
+    chordTones = []
+    for i in range(5):
+        chordTones.append('')
+    #Root selection
+    # Must be string 0:1
+    # Must be fret 2:12, though 12th fret limit is a bit artificial
+    #string = random.randrange(2)
+    #fret = 2 + random.randrange(11)
+    string = 0
+    fret = 8
+
+    chordRoot = STRING_FRET_LIST[string][fret]
+    chordTones[0] = STRING_FRET_LIST[string][fret]
+    chordTones[1] = STRING_FRET_LIST[string+MAJOR7_SHAPE[0][0]][fret+MAJOR7_SHAPE[0][1]]
+    chordTones[2] = STRING_FRET_LIST[string+MAJOR7_SHAPE[1][0]][fret+MAJOR7_SHAPE[1][1]]
+    chordTones[3] = STRING_FRET_LIST[string+MAJOR7_SHAPE[2][0]][fret+MAJOR7_SHAPE[2][1]]
+    chordTones[4] = STRING_FRET_LIST[string+MAJOR7_SHAPE[3][0]][fret+MAJOR7_SHAPE[3][1]]
+    print("root: " + chordRoot)
+    print("tones: " + str(chordTones))
+
+    return 0
+
+
 # This function will handle all "Find the fret of the note" style levels.
 # Currently:
 #   Level 0: Play an open string E, A, D, or G.  Useful for novices who don't
@@ -182,6 +225,9 @@ def fretFinder(aHandler, level):
             prefix = 'high '
         else:
             prefix = 'low '
+    else:
+        print("dev made an oops- unknown level: " + str(level))
+        return 0
 
     #If the user gets it wrong, ask for that same note until they get it right
     while result == False:
@@ -231,6 +277,8 @@ def main(args):
     elif level == 2:
         print("Level 2: Play the note listed!")
         print("  ... but we're sticking below " + str(NUM_FRETS) + " frets")
+    elif level == 3:
+        print("experimental!")
     else:
         print("well aren't we cheeky... you get level 0.")
         level = 0
@@ -259,10 +307,12 @@ def main(args):
                     # Finally print the pitch and the volume.
                     print(name + " " + str(pitch) + " " + str(volume))
             else:
-                # Eventually, split this out with some if statements for whether
-                # it's a fretFinder or shapeFinder level
-                result = fretFinder(aHandler, level)
-                resultList.append(result)
+                if level < 3:
+                    result = fretFinder(aHandler, level)
+                    resultList.append(result)
+                else:
+                    result = chordFinder(aHandler, level)
+                    return
                 continue
         except KeyboardInterrupt:
             # Print diags
