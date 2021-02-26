@@ -84,6 +84,7 @@ PERIOD_SIZE_IN_FRAME    = HOP_SIZE
 
 class AudioHandler:
     """Set up mic input, take samples when tick is called, provide freq and vol"""
+    confidenceLevel = 2
     def __init__(self):
          # Initiating PyAudio object.
         pA = pyaudio.PyAudio()
@@ -124,7 +125,6 @@ class AudioHandler:
 # processAudio() function returns the correct result.
 def waitForNote(aHandler, ignore = None):
     resultList = []
-    CONFIDENCE_LEVEL = 3
     # invoke processAudio on repeat.
     # Track the results in an array.  If you match 5 in a row, that's the result
     # disregard if volume is 0
@@ -143,7 +143,7 @@ def waitForNote(aHandler, ignore = None):
             continue
         resultList.insert(0, noteName)
         #print(noteName + " list so far: " + str(resultList))
-        if len(resultList) >= CONFIDENCE_LEVEL:
+        if len(resultList) >= aHandler.confidenceLevel:
             # Count the number of 'noteName' in list.  if same as length, then
             # we have all readings the same note at the required confidence
             # level, so return the note.  Otherwise, pop the last entry and cont
@@ -160,7 +160,6 @@ def waitForNote(aHandler, ignore = None):
 # returning.
 def waitForMute(aHandler):
     pitchList = []
-    CONFIDENCE_LEVEL = 3
     # invoke processAudio on repeat.
     # Track the results in an array.  If you match 5 in a row, that's the result
     # disregard if volume is 0
@@ -171,7 +170,7 @@ def waitForMute(aHandler):
 
         pitchList.insert(0, pitch)
         #print(str(pitch) + " list so far: " + str(pitchList))
-        if len(pitchList) >= CONFIDENCE_LEVEL:
+        if len(pitchList) >= aHandler.confidenceLevel:
             # Count the number of 'noteName' in list.  if same as length, then
             # we have all readings the same note at the required confidence
             # level, so return the note.  Otherwise, pop the last entry and cont
@@ -277,10 +276,10 @@ def chordFinder(aHandler, level):
             #print('played ' + played)
             if played == toPlay:
                 result = True
-                print("correct on " + str(i))
+                print("correct on " + str(i+1))
             else:
                 print("wrongzo!")
-                print("   " + str(i) + "heard " + played + " expected " + str(toPlay))
+                print("   " + str(i+1) + "heard " + played + " expected " + str(toPlay))
                 playsound(WRONG_SOUND)
                 ignore = played
         # move on to the next note, but be sure to ignore the current note or
@@ -290,6 +289,7 @@ def chordFinder(aHandler, level):
 
     delta = datetime.datetime.now() - start_time
     elapsed_time = delta.total_seconds()
+    print("DONE!")
     waitForMute(aHandler)
 
     return elapsed_time
@@ -403,7 +403,7 @@ def main(args):
     #      to having yet another block of if statements based on the level
     #      passed in
 
-    if level == -1:
+    if (level == -1) and args.vverbose == False:
         printHelpMessage()
         return
     elif level == 0:
@@ -433,6 +433,7 @@ def main(args):
 
     while True:
         # Run until the user control+c's
+        # TODO: add statistics!
         try:
             if (args.vverbose):
                 # In vverbose mode, just print what the user's playing so they
