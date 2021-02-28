@@ -4,7 +4,6 @@ TODO
     Minor
         click track with argument controlled bpm
         audible callout of chord and and shape (going from looking at frets to looking at screen is burning time)
-        hit/miss report at end of session
         save data to file and print historic analysis (performance now v last session, v historic, total time working each level, etc). Saved to file based on input arg
     Major
         Multiple chords + shapes

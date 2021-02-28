@@ -426,7 +426,6 @@ def main(args):
     verbose = args.verbose
 
     gVolume  = args.volume/100.0
-    print("audio volume: " + str(gVolume))
 
     print ROBOT
 
