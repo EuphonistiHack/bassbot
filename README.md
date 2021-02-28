@@ -33,9 +33,9 @@ support, so this one might be janky for a while :(
 
     https://thetechinfinite.com/2020/07/14/how-to-install-pyaudio-module-in-python-3-0-in-windows/
 
-The last package to install will be playsound:
+The last package to install will be pygame:
 
-    pip install playsound
+    pip install pygame
 
 The above commands should result in all dependent modules being installed.  In
 case something is missing, you can try using pip to install them instead:

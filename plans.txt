@@ -1,10 +1,8 @@
 TODO
     fix python 3 deprecation warnings
-    replace mute strings requirement on fretfinder with new ignore functionality
 
     Minor
         click track with argument controlled bpm
-        positive feedback noise on chord correct
         audible callout of chord and and shape (going from looking at frets to looking at screen is burning time)
         hit/miss report at end of session
         save data to file and print historic analysis (performance now v last session, v historic, total time working each level, etc). Saved to file based on input arg

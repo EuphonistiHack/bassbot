@@ -15,7 +15,7 @@ from threading import Thread, Event
 import argparse
 import random
 import datetime
-from playsound import playsound
+import pygame
 
 NOTE_NAMES = 'C C# D D# E F F# G G# A A# B'.split()
 
@@ -49,7 +49,8 @@ MINOR7_SHAPE = [[1,-2], [1,2], [2,0], [2,2]]
 MINOR7FLAT5_SHAPE = [[1,-2], [1,1], [2,0], [2,2]]
 SHAPE_LIST = [MAJOR7_SHAPE, DOM7_SHAPE, MINOR7_SHAPE, MINOR7FLAT5_SHAPE]
 
-WRONG_SOUND = 'wrongNoise.ogg'
+WRONG_SOUND = 'custWrong.ogg'
+RIGHT_SOUND = 'custRight.ogg'
 
 ROBOT = """
 ~~~~~~~~~~BASSBOT~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -81,6 +82,21 @@ METHOD                  = "default"
 SAMPLE_RATE             = 44100
 HOP_SIZE                = BUFFER_SIZE//2
 PERIOD_SIZE_IN_FRAME    = HOP_SIZE
+
+gVolume = 1.0
+
+class sessionInfo:
+    """Track performance statics through playing"""
+    numRight = 0
+    numWrong = 0
+    timeList = ''
+    level = 0
+
+    def __init__(self, level):
+        self.numRight = 0
+        self.numWrong = 0
+        self.timeList = ''
+        self.level = level
 
 class AudioHandler:
     """Set up mic input, take samples when tick is called, provide freq and vol"""
@@ -182,14 +198,14 @@ def waitForMute(aHandler):
 #TODO: move the string, fret, order parameters out of the chordFinder function.
 #      It feels ugly having level if's in the main call and in each finder
 #      function- the level parameters should be passed into these fxns instead
-def chordFinder(aHandler, level):
+def chordFinder(aHandler, session):
     result = False
     chordTones = []
     for i in range(5):
         chordTones.append('')
 
-    #  Start the timer to count how long the user takes
-    start_time = datetime.datetime.now()
+    level = session.level
+    print("level " + str(level))
 
     #Root selection
     if level == 4:
@@ -280,19 +296,25 @@ def chordFinder(aHandler, level):
             else:
                 print("wrongzo!")
                 print("   " + str(i+1) + "heard " + played + " expected " + str(toPlay))
-                playsound(WRONG_SOUND)
+                sound = pygame.mixer.Sound(WRONG_SOUND)
+                sound.set_volume(gVolume)
+                sound.play()
+                session.numWrong += 1
+                #playsound(WRONG_SOUND)
                 ignore = played
         # move on to the next note, but be sure to ignore the current note or
         # the user will auto-fail
         ignore = toPlay
         result = False
 
-    delta = datetime.datetime.now() - start_time
-    elapsed_time = delta.total_seconds()
+    sound = pygame.mixer.Sound(RIGHT_SOUND)
+    sound.set_volume(gVolume)
+    sound.play()
+    session.numRight += 1
     print("DONE!")
     waitForMute(aHandler)
 
-    return elapsed_time
+    return chordRoot
 
 # This function will handle all "Find the fret of the note" style levels.
 # Currently:
@@ -302,61 +324,63 @@ def chordFinder(aHandler, level):
 #   Level 2: Play a given note on a given string, limited to the 12th fret
 #   Level 3: Play a given note on a given string, limited to the 18th fret
 # This function will return the amount of time it took the user to find the note
-def fretFinder(aHandler, level):
+def fretFinder(aHandler, session, lastNote):
     result = False
 
-    # Start the timer to count how long the user takes
-    start_time = datetime.datetime.now()
+    toPlay = lastNote
+    level = session.level
 
-    # Select a random string, 1-4
-    string = random.randrange(4)
+    while toPlay == lastNote:
+        # Select a random string, 1-4
+        string = random.randrange(4)
 
-    # Select the fret for that string
-    if (level == 0):
-        fret = 0
-        prefix = ''
-    elif (level == 1):
-        fret = random.randrange(5)
-        prefix = ''
-    elif (level == 2):
-        fret = random.randrange(13)
-        # Any mode with fret 12 or higher in play needs a high/low prefix to
-        # differentiate between open string and the 12th+ fret
-        if fret >= 12:
-            prefix = 'high '
+        # Select the fret for that string
+        if (level == 0):
+            fret = 0
+            prefix = ''
+        elif (level == 1):
+            fret = random.randrange(5)
+            prefix = ''
+        elif (level == 2):
+            fret = random.randrange(13)
+            # Any mode with fret 12 or higher in play needs a high/low prefix to
+            # differentiate between open string and the 12th+ fret
+            if fret >= 12:
+                prefix = 'high '
+            else:
+                prefix = 'low '
+        elif (level == 3):
+            fret = random.randrange(NUM_FRETS)
+            if fret >= 12:
+                prefix = 'high '
+            else:
+                prefix = 'low '
         else:
-            prefix = 'low '
-    elif (level == 3):
-        fret = random.randrange(NUM_FRETS)
-        if fret >= 12:
-            prefix = 'high '
-        else:
-            prefix = 'low '
-    else:
-        print("dev made an oops- unknown level: " + str(level))
-        return 0
+            print("dev made an oops- unknown level: " + str(level))
+            return 0
+
+        toPlay = STRING_FRET_LIST[string][fret]
 
     #If the user gets it wrong, ask for that same note until they get it right
     while result == False:
-        toPlay = STRING_FRET_LIST[string][fret]
         print(STRING_LIST[string] + " string: " + prefix + toPlay)
         # Uncomment the below if you're a dirty dirty cheat
         # print('string ' + str(string+1) + ' fret ' + str(fret))
-        played = waitForNote(aHandler)
+        played = waitForNote(aHandler, lastNote)
         #print('played ' + played)
         if played == toPlay:
             result = True
-            delta = datetime.datetime.now() - start_time
-            elapsed_time = delta.total_seconds()
-            print("correct!  played " + str(played) + " in " + str(elapsed_time) + " seconds")
-            print("Mute the strings for your next note")
+            session.numRight += 1
+            print("correct!  played " + str(played))
         else:
             print("wrongzo!")
             print("   expected " + str(toPlay) + ', string ' + str(string+1) + ' fret ' + str(fret))
             print("   heard " + str(played))
-        waitForMute(aHandler)
+            lastNote = played
+            session.numWrong += 1
+        #waitForMute(aHandler)
 
-    return elapsed_time
+    return toPlay
 
 def printHelpMessage():
     print("Welcome to bassbot!  Use the -l flag to select from one of the following levels:")
@@ -380,9 +404,14 @@ def printHelpMessage():
 # does main stuff
 def main(args):
 
-    # initialize the audio interface
+    # initialize the input audio interface
     aHandler = AudioHandler()
     resultList = []
+    lastNote = ''
+    global gVolume
+
+    pygame.init()
+    pygame.mixer.init()
 
     # handle argument parsing, because we don't need no stinkin gui
     parser = argparse.ArgumentParser()
@@ -391,9 +420,13 @@ def main(args):
     parser.add_argument("--vverbose", "-vv", help="increase output verbosity",
                     action="store_true")
     parser.add_argument('-l', dest='level', default=-1, action='store', type=int)
+    parser.add_argument('-s', dest='volume', default=100, action='store', type=int)
     args = parser.parse_args()
     level = args.level
     verbose = args.verbose
+
+    gVolume  = args.volume/100.0
+    print("audio volume: " + str(gVolume))
 
     print ROBOT
 
@@ -431,6 +464,7 @@ def main(args):
         print("well aren't we cheeky... you get level 0.")
         level = 0
 
+    session = sessionInfo(level)
     while True:
         # Run until the user control+c's
         # TODO: add statistics!
@@ -456,18 +490,23 @@ def main(args):
                     # Finally print the pitch and the volume.
                     print(name + " " + str(pitch) + " " + str(volume))
             else:
+                # Start the timer to count how long the user takes
+                start_time = datetime.datetime.now()
                 if level < 4:
-                    result = fretFinder(aHandler, level)
-                    resultList.append(result)
+                    lastNote = fretFinder(aHandler, session, lastNote)
                 else:
-                    result = chordFinder(aHandler, level)
-                    resultList.append(result)
-                continue
+                    lastNote = chordFinder(aHandler, session)
+
+                # Calculate how long that took and append to stat list
+                delta = datetime.datetime.now() - start_time
+                elapsed_time = delta.total_seconds()
+                resultList.append(elapsed_time)
         except KeyboardInterrupt:
             # Print diags
             print("Session complete!")
             if len(resultList) != 0:
                 print("Average time: " + str(sum(resultList) / len(resultList)) + " seconds")
+                print("Played " + str(session.numWrong) + " wrong notes on " + str(session.numRight) + " total")
             return
 
 if __name__ == "__main__": main(sys.argv)
