@@ -1,0 +1,2 @@
+.ui to python code:
+  pyuic5 -x <input.ui> -o <output.py>
