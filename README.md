@@ -18,7 +18,7 @@ which are necessary for the aubio module:
     # conda [osx, linux, win]
     conda install -c conda-forge aubio
     # .deb (debian, ubuntu) [linux]
-    sudo apt-get install python3-aubio python-aubio aubio-tools
+    sudo apt-get install python3-aubio python-aubio aubio-tools python-tk python3-tk
     # brew [osx]
     brew install aubio --with-python
 

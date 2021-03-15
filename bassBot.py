@@ -275,7 +275,7 @@ def chordFinder(aHandler, session):
     if (level == 6):
         print("order: " + orderString)
     #print("root: " + prefix + chordRoot)
-    print('string ' + str(string+1) + ' fret ' + str(fret))
+    #print('string ' + str(string+1) + ' fret ' + str(fret))
     #print('shape num ' + str(shape_num))
     #print('shape ' + SHAPE_NAMES[shape_num])
     #print("tones: " + str(chordTones))
@@ -427,7 +427,7 @@ def main(args):
 
     gVolume  = args.volume/100.0
 
-    print ROBOT
+    print(ROBOT)
 
     #TODO: these ifs should track a testFunction (=fretFinder or =chordFinder)
     #      and store a paramlist based on the level.  The while loop below

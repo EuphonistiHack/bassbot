@@ -2,13 +2,20 @@ TODO
     fix python 3 deprecation warnings
 
     Minor
-        click track with argument controlled bpm
-        audible callout of chord and and shape (going from looking at frets to looking at screen is burning time)
         save data to file and print historic analysis (performance now v last session, v historic, total time working each level, etc). Saved to file based on input arg
     Major
+        Chords for bars:
+            GUI arguments for how many bars each chord will be played for
+            "Free play" chord exercise. Arpeggio by default, scale mode optional
+            ChordExercise class implements chordTimeout
+                TODO: who controls timer schedule for next chord?  Should exercise class instantiate and own its own timer?
+                Once a note is played (evaluateNote returns true), QTimer starts
+                Qtimer registers exercise class' chordTimeout function as handler
+                chordTimeout procedes to next chord on list, returns True when list is empty
+
+
         Multiple chords + shapes
             Look up common chord progressions, choose from a list.  One at a time is ok, but I need a full chord sheet to make this useful
-        GUI!!  We're getting close to this being a necessity
 
 Phase 1: fret identification
 Phase 2: chord shaping

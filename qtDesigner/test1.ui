@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>MainWindow</class>
- <widget class="QMainWindow" name="MainWindow">
+ <class>BassBot</class>
+ <widget class="QMainWindow" name="BassBot">
   <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>995</width>
-    <height>487</height>
+    <width>987</width>
+    <height>417</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -18,28 +18,12 @@
     <property name="geometry">
      <rect>
       <x>31</x>
-      <y>0</y>
+      <y>20</y>
       <width>121</width>
-      <height>211</height>
+      <height>191</height>
      </rect>
     </property>
     <layout class="QVBoxLayout" name="ExerciseLayout">
-     <item>
-      <widget class="QLabel" name="label">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="text">
-        <string>Level</string>
-       </property>
-       <property name="alignment">
-        <set>Qt::AlignHCenter|Qt::AlignTop</set>
-       </property>
-      </widget>
-     </item>
      <item>
       <widget class="QRadioButton" name="exerciseRadioFrets">
        <property name="text">
@@ -54,13 +38,20 @@
        </property>
       </widget>
      </item>
+     <item>
+      <widget class="QRadioButton" name="exerciseRadioFreePlay">
+       <property name="text">
+        <string>Free Play</string>
+       </property>
+      </widget>
+     </item>
     </layout>
    </widget>
    <widget class="QWidget" name="verticalLayoutWidget_3">
     <property name="geometry">
      <rect>
       <x>761</x>
-      <y>190</y>
+      <y>210</y>
       <width>191</width>
       <height>161</height>
      </rect>
@@ -95,7 +86,7 @@
     <property name="geometry">
      <rect>
       <x>761</x>
-      <y>0</y>
+      <y>20</y>
       <width>191</width>
       <height>191</height>
      </rect>
@@ -155,7 +146,7 @@
       <x>30</x>
       <y>209</y>
       <width>121</width>
-      <height>141</height>
+      <height>161</height>
      </rect>
     </property>
     <layout class="QVBoxLayout" name="ReportLayout"/>
@@ -164,34 +155,12 @@
     <property name="geometry">
      <rect>
       <x>150</x>
-      <y>-1</y>
+      <y>19</y>
       <width>111</width>
       <height>351</height>
      </rect>
     </property>
     <layout class="QVBoxLayout" name="OptionsLayout">
-     <item>
-      <widget class="QLabel" name="optionsLabel">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="Preferred" vsizetype="Minimum">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="maximumSize">
-        <size>
-         <width>16777215</width>
-         <height>19</height>
-        </size>
-       </property>
-       <property name="text">
-        <string>Options</string>
-       </property>
-       <property name="alignment">
-        <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
-       </property>
-      </widget>
-     </item>
      <item>
       <widget class="QRadioButton" name="levelRadio1">
        <property name="text">
@@ -226,7 +195,7 @@
     <property name="geometry">
      <rect>
       <x>290</x>
-      <y>-1</y>
+      <y>19</y>
       <width>471</width>
       <height>351</height>
      </rect>
@@ -247,8 +216,28 @@
        <property name="text">
         <string>Current note/shape/whateves here</string>
        </property>
+       <property name="alignment">
+        <set>Qt::AlignBottom|Qt::AlignLeading|Qt::AlignLeft</set>
+       </property>
        <property name="wordWrap">
         <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="secondaryGoalLabel">
+       <property name="text">
+        <string>Arpeggio order/current chord here</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="currentStatusLabel">
+       <property name="text">
+        <string/>
        </property>
       </widget>
      </item>
@@ -258,23 +247,19 @@
     <property name="geometry">
      <rect>
       <x>260</x>
-      <y>-1</y>
+      <y>19</y>
       <width>31</width>
       <height>351</height>
      </rect>
     </property>
     <layout class="QVBoxLayout" name="VolumeLayout">
      <item>
-      <widget class="QLabel" name="label_3">
-       <property name="text">
-        <string>Vol</string>
-       </property>
-      </widget>
-     </item>
-     <item>
       <widget class="QSlider" name="volumeSlider">
+       <property name="value">
+        <number>10</number>
+       </property>
        <property name="sliderPosition">
-        <number>75</number>
+        <number>10</number>
        </property>
        <property name="orientation">
         <enum>Qt::Vertical</enum>
@@ -287,7 +272,7 @@
     <property name="geometry">
      <rect>
       <x>0</x>
-      <y>0</y>
+      <y>20</y>
       <width>31</width>
       <height>351</height>
      </rect>
@@ -312,12 +297,140 @@
     <property name="geometry">
      <rect>
       <x>950</x>
-      <y>0</y>
+      <y>20</y>
       <width>31</width>
       <height>351</height>
      </rect>
     </property>
     <layout class="QHBoxLayout" name="horizontalLayout_2"/>
+   </widget>
+   <widget class="QWidget" name="verticalLayoutWidget_2">
+    <property name="geometry">
+     <rect>
+      <x>30</x>
+      <y>0</y>
+      <width>121</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <layout class="QVBoxLayout" name="verticalLayout">
+     <item>
+      <widget class="QLabel" name="label">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="text">
+        <string>Exercise</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignHCenter|Qt::AlignTop</set>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </widget>
+   <widget class="QWidget" name="verticalLayoutWidget_9">
+    <property name="geometry">
+     <rect>
+      <x>150</x>
+      <y>0</y>
+      <width>71</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <layout class="QVBoxLayout" name="verticalLayout_2">
+     <item>
+      <widget class="QLabel" name="optionsLabel">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>16777215</width>
+         <height>19</height>
+        </size>
+       </property>
+       <property name="text">
+        <string>Level</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignHCenter|Qt::AlignTop</set>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </widget>
+   <widget class="QWidget" name="verticalLayoutWidget_10">
+    <property name="geometry">
+     <rect>
+      <x>220</x>
+      <y>0</y>
+      <width>101</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <layout class="QVBoxLayout" name="verticalLayout_3">
+     <item>
+      <widget class="QLabel" name="label_3">
+       <property name="text">
+        <string>Volume</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignCenter</set>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </widget>
+   <widget class="QWidget" name="verticalLayoutWidget_11">
+    <property name="geometry">
+     <rect>
+      <x>760</x>
+      <y>0</y>
+      <width>191</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <layout class="QVBoxLayout" name="verticalLayout_4">
+     <item>
+      <widget class="QLabel" name="label_4">
+       <property name="text">
+        <string>Metronome</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignCenter</set>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </widget>
+   <widget class="QWidget" name="verticalLayoutWidget_12">
+    <property name="geometry">
+     <rect>
+      <x>430</x>
+      <y>0</y>
+      <width>161</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <layout class="QVBoxLayout" name="verticalLayout_5">
+     <item>
+      <widget class="QLabel" name="label_2">
+       <property name="text">
+        <string>Objective</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignCenter</set>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </widget>
   </widget>
   <widget class="QMenuBar" name="menubar">
@@ -325,7 +438,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>995</width>
+     <width>987</width>
      <height>22</height>
     </rect>
    </property>

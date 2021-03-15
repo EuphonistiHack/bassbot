@@ -12,6 +12,7 @@
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtCore import QTimer, Qt, QObject, QThread, pyqtSignal
+from PyQt5.QtGui import QPalette, QColor
 
 from pygame import mixer
 
@@ -58,6 +59,7 @@ SHAPE_LIST = [MAJOR7_SHAPE, DOM7_SHAPE, MINOR7_SHAPE, MINOR7FLAT5_SHAPE]
 
 WRONG_SOUND = 'custWrong.ogg'
 RIGHT_SOUND = 'custRight.ogg'
+CLICK_SOUND = 'click.wav'
 
 ROBOT = """
 ~~~~~~~~~~BASSBOT~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -82,18 +84,13 @@ def note_name(n): return NOTE_NAMES[n % 12] + str(int(n/12 - 1))
 
 # Some constants for setting the PyAudio capture and aubio note detection
 # parameters
-BUFFER_SIZE             = 4096*2
+BUFFER_SIZE             = 4096
 CHANNELS                = 1
 FORMAT                  = pyaudio.paFloat32
 METHOD                  = "default"
 SAMPLE_RATE             = 44100
 HOP_SIZE                = BUFFER_SIZE//2
 PERIOD_SIZE_IN_FRAME    = HOP_SIZE
-
-LEVEL_TYPE_FRETFINDER   = 0
-LEVEL_TYPE_CHORDSHAPES  = 1
-
-gVolume = 1.0
 
 class sessionInfo:
     """Track performance statics through playing"""
@@ -144,6 +141,217 @@ class AudioHandler:
 class levelConfig():
     evaluateFxn = 0
 
+class freePlay():
+    """Exercise for playing in the right key for the right amount of time"""
+    def getInstructions(self):
+        if self.level == 1:
+            return "Level 1: Play in the chord's arpeggio 2 bars, then move to next chord"
+        elif self.level == 2:
+            return "Level 2: Play in the chord's scale 2 bars, then move to next chord"
+        else:
+            return "There is no cow level"
+
+    def __init__(self, level = 1, lastNote = ''):
+        self.level = level
+        self.currentChord = ''
+        self.chordString = ''
+        self.chordList = []
+        self.chordIndex = -1
+        self.currentValid = []
+        self.ignoreNote = ''
+        self.rightSound = mixer.Sound(RIGHT_SOUND)
+        self.wrongSound = mixer.Sound(WRONG_SOUND)
+
+        self.setNewGoal()
+        self.status = ''
+
+    def advanceChord(self):
+        self.chordIndex += 1
+        if self.chordIndex >= len(self.chordList):
+            self.chordIndex = 0
+        self.updateSecondaryGoal()
+        self.currentChord = self.chordList[self.chordIndex]
+        if self.level == 1:
+            self.getArpeggios(self.currentChord)
+        else:
+            self.getScales(self.currentChord)
+
+    def set_volume(self, volume):
+        self.rightSound.set_volume(volume)
+        self.wrongSound.set_volume(volume)
+
+    def getStatus(self):
+        return self.status
+
+    def getGoal(self):
+        return self.goal
+
+    def getSecondaryGoal(self):
+        return self.secondaryGoal
+
+################################################################################
+# M = Major 7th, print "^7" snince we have no triangle
+# D = Dominant 7th, print 7
+# m = minor 7th, print m7
+# b = minor 7th flat 5, print m7b5
+#
+# When chord is listed, all octaves of chord are acceptable (no hi/mid/lo)
+################################################################################
+
+    def updateSecondaryGoal(self):
+        if (self.chordIndex >= 0):
+            self.secondaryGoal = "................."
+            for i in range(self.chordIndex):
+                self.secondaryGoal += "............."
+        else:
+            self.secondaryGoal = "......"
+        self.secondaryGoal += "*"
+
+
+    def setNewGoal(self):
+        #hard coding for now... eventually, we figure out how to random
+        self.chordList = ["CM", "Em", "FM", "GD"]
+        self.chordIndex = -1
+        self.currentChord = self.chordList[0]
+        if self.level == 1:
+            self.getArpeggios(self.currentChord)
+        else:
+            self.getScales(self.currentChord)
+
+        self.chordString = ''
+        for chord in self.chordList:
+            # first grab the note
+            self.chordString += chord[0]
+
+            #then get the human readable symbol
+            self.chordString += self.readableKey(chord[1]) + str("......")
+
+        self.goal = "Play:......" + self.chordString
+        self.updateSecondaryGoal()
+
+    def readableKey(self, keyCode):
+        if keyCode == "M":
+            return "^7"
+        elif keyCode == "D":
+            return " 7"
+        elif keyCode == "m":
+            return "m7"
+        elif keyCode == "b":
+            return "m7b5"
+        else:
+            return "ERRRRROR!"
+
+    # Takes in note index from NOTE_NAME, adds toAdd, and wraps around if
+    # result is more than 11
+    def addNotes(self, note, toAdd):
+        return (note + toAdd) % 12
+
+    def getNoteIdx(self, note):
+        return NOTE_NAMES.index(note)
+
+    # Set the current Valid list based on the current root chord.
+    # Root chord will be in the format CM, CD, Cm, Cb
+    def getArpeggios(self, root):
+        #Major:
+        # start with NOTE_NAMES, determine where root is.
+        # marjor arpeggio is 1 3 5 7 8
+        # indeces for scale: 0 2 4 5 7 9 11 12
+        #   whole whole half whole whole whole half
+        #   scale list will be rootIdx, rootIdx + 2, +4, +5, +7, +9, +11
+        #   arpeggio list will be rootIdx, +4, +7, +11
+        noteName = root[:-1]
+        keyCode = root[-1]
+        rootIdx = self.getNoteIdx(noteName)
+
+        print("rootidx: " + str(rootIdx))
+
+        self.currentValid = [noteName]
+        if keyCode == "M":
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 4)]
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 7)]
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 11)]
+        elif keyCode == "D":
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 4)]
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 7)]
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 10)]
+        elif keyCode == "m":
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 3)]
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 7)]
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 10)]
+        elif keyCode == "b":
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 3)]
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 6)]
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 10)]
+        else:
+            print("Error in getting arpeggios!!")
+
+    # Set the current Valid list based on the current root chord.
+    # Root chord will be in the format CM, CD, Cm, Cb
+    def getScales(self, root):
+        # Need to figure out all the options for this fella
+        noteName = root[:-1]
+        keyCode = root[-1]
+        rootIdx = self.getNoteIdx(noteName)
+
+        self.currentValid = [noteName]
+        if keyCode == "M":
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 2)]
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 4)]
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 5)]
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 7)]
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 9)]
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 11)]
+        elif keyCode == "D":
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 2)]
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 4)]
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 5)]
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 7)]
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 9)]
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 10)]
+        elif keyCode == "m":
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 2)]
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 3)]
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 5)]
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 7)]
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 9)]
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 10)]
+        elif keyCode == "b":
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 2)]
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 3)]
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 5)]
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 6)]
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 9)]
+            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 10)]
+        else:
+            print("Error in getting scale notes!")
+
+    # return True if display needs to be updated based on evaluation
+    def evaluateNote(self, playedNote):
+        # if this is a note we're ignoring, do nothing
+        if (playedNote == self.ignoreNote):
+            return False
+
+        # if this is a mute note, clear the ignore list and do nothing
+        if playedNote == 'none':
+            self.ignoreNote = playedNote
+            return False
+
+        self.ignoreNote = playedNote
+        playedNote = playedNote[:-1]
+        root = playedNote[:-1]
+        goodNote = False
+        for note in self.currentValid:
+            if note == playedNote:
+                self.status = "Correct!"
+                return True
+
+        # If we are here, then a note is played that is not in the valid list
+        self.status = "Out of key!  heard " + str(playedNote) + "\n"
+        self.status += "expected one of: " + str(self.currentValid)
+        self.wrongSound.play()
+        return True
+
+
 class chordFinder():
     """Handle instructions, goals, and evaluations for chordFinder exercises"""
     def getInstructions(self):
@@ -167,6 +375,8 @@ class chordFinder():
         self.ignoreNote = lastNote
         self.numRight = 0
         self.numWrong = 0
+        self.rightSound = mixer.Sound(RIGHT_SOUND)
+        self.wrongSound = mixer.Sound(WRONG_SOUND)
 
         self.chordTones = []
         for i in range(5):
@@ -175,6 +385,17 @@ class chordFinder():
         self.noteIdx = 0
 
         self.setNewGoal()
+        self.status = ''
+
+    def set_volume(self, volume):
+        self.rightSound.set_volume(volume)
+        self.wrongSound.set_volume(volume)
+
+    def getStatus(self):
+        return self.status
+
+    def getSecondaryGoal(self):
+        return self.secondaryGoal
 
     def getGoal(self):
         return self.goal
@@ -196,6 +417,7 @@ class chordFinder():
     def setNewGoal(self):
         string = 0
         fret = 0
+        self.secondaryGoal = ''
         if self.level == 1:
             string = 0
             fret = 8
@@ -244,7 +466,7 @@ class chordFinder():
             chordRoot = chordRoot[:-1]
 
         # shape selection
-        if self.level == 1:
+        if self.level == 3:
             shape_num = 0
         else:
             shape_num = random.randrange(4)
@@ -255,11 +477,13 @@ class chordFinder():
             self.chordTones[i] = STRING_FRET_LIST[string+shape[i-1][0]][fret+shape[i-1][1]]
 
         print(SHAPE_NAMES[shape_num] + " " + prefix + chordRoot)
-        self.goal = SHAPE_NAMES[shape_num] + " " + prefix + chordRoot
+        self.goal = prefix + chordRoot + " " + SHAPE_NAMES[shape_num]
         if (self.level >= 3):
             print("order: " + orderString)
             self.goal += "\norder: " + orderString
-            self.goal += "\nplayed: "
+
+        self.secondaryGoal += "play: "
+        self.secondaryGoal += str(self.getArpFromIdx(self.order[0])) + " "
         self.noteIdx = 0;
 
     def evaluateNote(self, playedNote):
@@ -281,11 +505,13 @@ class chordFinder():
 
             if self.noteIdx >= len(self.order) -1:
                 self.setNewGoal()
+                self.status = ""
                 print("Exercise complete!  Next note!")
+                self.rightSound.play()
                 return True
             else:
-                self.goal += str(self.getArpFromIdx(self.order[self.noteIdx])) + " "
                 self.noteIdx += 1
+                self.secondaryGoal += str(self.getArpFromIdx(self.order[self.noteIdx])) + " "
                 return True
         else:
             print("wrongzo!")
@@ -293,7 +519,9 @@ class chordFinder():
             print("   heard " + str(playedNote))
 
             self.numWrong += 1
-            self.goal = "WRONG!!!! " + self.goal
+            self.status = str(self.getArpFromIdx(self.order[self.noteIdx])) + " WRONG!\n"
+            self.status += str("expected " + str(self.toPlay) + ", heard " + str(playedNote))
+            self.wrongSound.play()
             return True
 
 class fretFinder():
@@ -341,7 +569,7 @@ class fretFinder():
                 else:
                     prefix = 'low '
             else:
-                print("dev made an oops- unknown level: " + str(self.level))
+                print("dev made an oops- unknown level:" + str(self.level))
                 return 0
 
             self.toPlay = STRING_FRET_LIST[string][fret]
@@ -354,8 +582,22 @@ class fretFinder():
         self.ignoreNote = lastNote
         self.numRight = 0
         self.numWrong = 0
+        self.rightSound = mixer.Sound(RIGHT_SOUND)
+        self.wrongSound = mixer.Sound(WRONG_SOUND)
 
+        self.secondaryGoal = ''
         self.setNewGoal()
+        self.status = ''
+
+    def set_volume(self, volume):
+        self.rightSound.set_volume(volume)
+        self.wrongSound.set_volume(volume)
+
+    def getSecondaryGoal(self):
+        return self.secondaryGoal
+
+    def getStatus(self):
+        return self.status
 
     def getGoal(self):
         return self.goal
@@ -375,6 +617,7 @@ class fretFinder():
             print("correct!  played " + str(playedNote))
             self.ignoreNote = playedNote
             self.setNewGoal()
+            self.rightSound.play()
             return True
         else:
             print("wrongzo!")
@@ -383,12 +626,13 @@ class fretFinder():
             self.ignoreNote = playedNote
             self.numWrong += 1
             self.goal = "WRONG!!!! " + self.goal
+            self.wrongSound.play()
             return True
 
 class Worker (QObject):
     finished = pyqtSignal()
     progress = pyqtSignal(str)
-    confidenceLevel = 3
+    confidenceLevel = 2
 
     def run(self):
         self.aHandler = AudioHandler()
@@ -434,35 +678,29 @@ class Worker (QObject):
 # Tieing signals, starting timers, etc should be done below the
 # END PYUIC5 SECTION section.
 ################################################################################
-class Ui_MainWindow(object):
-    def setupUi(self, MainWindow):
-        MainWindow.setObjectName("MainWindow")
-        MainWindow.resize(995, 487)
-        self.centralwidget = QtWidgets.QWidget(MainWindow)
+class Ui_BassBot(object):
+    def setupUi(self, BassBot):
+        BassBot.setObjectName("BassBot")
+        BassBot.resize(987, 417)
+        self.centralwidget = QtWidgets.QWidget(BassBot)
         self.centralwidget.setObjectName("centralwidget")
         self.verticalLayoutWidget = QtWidgets.QWidget(self.centralwidget)
-        self.verticalLayoutWidget.setGeometry(QtCore.QRect(31, 0, 121, 211))
+        self.verticalLayoutWidget.setGeometry(QtCore.QRect(31, 20, 121, 191))
         self.verticalLayoutWidget.setObjectName("verticalLayoutWidget")
         self.ExerciseLayout = QtWidgets.QVBoxLayout(self.verticalLayoutWidget)
         self.ExerciseLayout.setContentsMargins(0, 0, 0, 0)
         self.ExerciseLayout.setObjectName("ExerciseLayout")
-        self.label = QtWidgets.QLabel(self.verticalLayoutWidget)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Minimum)
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.label.sizePolicy().hasHeightForWidth())
-        self.label.setSizePolicy(sizePolicy)
-        self.label.setAlignment(QtCore.Qt.AlignHCenter|QtCore.Qt.AlignTop)
-        self.label.setObjectName("label")
-        self.ExerciseLayout.addWidget(self.label)
         self.exerciseRadioFrets = QtWidgets.QRadioButton(self.verticalLayoutWidget)
         self.exerciseRadioFrets.setObjectName("exerciseRadioFrets")
         self.ExerciseLayout.addWidget(self.exerciseRadioFrets)
         self.exerciseRadioChords = QtWidgets.QRadioButton(self.verticalLayoutWidget)
         self.exerciseRadioChords.setObjectName("exerciseRadioChords")
         self.ExerciseLayout.addWidget(self.exerciseRadioChords)
+        self.exerciseRadioFreePlay = QtWidgets.QRadioButton(self.verticalLayoutWidget)
+        self.exerciseRadioFreePlay.setObjectName("exerciseRadioFreePlay")
+        self.ExerciseLayout.addWidget(self.exerciseRadioFreePlay)
         self.verticalLayoutWidget_3 = QtWidgets.QWidget(self.centralwidget)
-        self.verticalLayoutWidget_3.setGeometry(QtCore.QRect(761, 190, 191, 161))
+        self.verticalLayoutWidget_3.setGeometry(QtCore.QRect(761, 210, 191, 161))
         self.verticalLayoutWidget_3.setObjectName("verticalLayoutWidget_3")
         self.TunerLayout = QtWidgets.QVBoxLayout(self.verticalLayoutWidget_3)
         self.TunerLayout.setContentsMargins(0, 0, 0, 0)
@@ -478,7 +716,7 @@ class Ui_MainWindow(object):
         self.tunerScrollBar.setObjectName("tunerScrollBar")
         self.TunerLayout.addWidget(self.tunerScrollBar)
         self.verticalLayoutWidget_4 = QtWidgets.QWidget(self.centralwidget)
-        self.verticalLayoutWidget_4.setGeometry(QtCore.QRect(761, 0, 191, 191))
+        self.verticalLayoutWidget_4.setGeometry(QtCore.QRect(761, 20, 191, 191))
         self.verticalLayoutWidget_4.setObjectName("verticalLayoutWidget_4")
         self.MetronomeLayout = QtWidgets.QVBoxLayout(self.verticalLayoutWidget_4)
         self.MetronomeLayout.setContentsMargins(0, 0, 0, 0)
@@ -506,27 +744,17 @@ class Ui_MainWindow(object):
         self.metroButton.setObjectName("metroButton")
         self.MetronomeLayout.addWidget(self.metroButton)
         self.verticalLayoutWidget_5 = QtWidgets.QWidget(self.centralwidget)
-        self.verticalLayoutWidget_5.setGeometry(QtCore.QRect(30, 209, 121, 141))
+        self.verticalLayoutWidget_5.setGeometry(QtCore.QRect(30, 209, 121, 161))
         self.verticalLayoutWidget_5.setObjectName("verticalLayoutWidget_5")
         self.ReportLayout = QtWidgets.QVBoxLayout(self.verticalLayoutWidget_5)
         self.ReportLayout.setContentsMargins(0, 0, 0, 0)
         self.ReportLayout.setObjectName("ReportLayout")
         self.verticalLayoutWidget_6 = QtWidgets.QWidget(self.centralwidget)
-        self.verticalLayoutWidget_6.setGeometry(QtCore.QRect(150, -1, 111, 351))
+        self.verticalLayoutWidget_6.setGeometry(QtCore.QRect(150, 19, 111, 351))
         self.verticalLayoutWidget_6.setObjectName("verticalLayoutWidget_6")
         self.OptionsLayout = QtWidgets.QVBoxLayout(self.verticalLayoutWidget_6)
         self.OptionsLayout.setContentsMargins(0, 0, 0, 0)
         self.OptionsLayout.setObjectName("OptionsLayout")
-        self.optionsLabel = QtWidgets.QLabel(self.verticalLayoutWidget_6)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Minimum)
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.optionsLabel.sizePolicy().hasHeightForWidth())
-        self.optionsLabel.setSizePolicy(sizePolicy)
-        self.optionsLabel.setMaximumSize(QtCore.QSize(16777215, 19))
-        self.optionsLabel.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignTop)
-        self.optionsLabel.setObjectName("optionsLabel")
-        self.OptionsLayout.addWidget(self.optionsLabel)
         self.levelRadio1 = QtWidgets.QRadioButton(self.verticalLayoutWidget_6)
         self.levelRadio1.setObjectName("levelRadio1")
         self.OptionsLayout.addWidget(self.levelRadio1)
@@ -540,7 +768,7 @@ class Ui_MainWindow(object):
         self.levelRadio4.setObjectName("levelRadio4")
         self.OptionsLayout.addWidget(self.levelRadio4)
         self.verticalLayoutWidget_7 = QtWidgets.QWidget(self.centralwidget)
-        self.verticalLayoutWidget_7.setGeometry(QtCore.QRect(290, -1, 471, 351))
+        self.verticalLayoutWidget_7.setGeometry(QtCore.QRect(290, 19, 471, 351))
         self.verticalLayoutWidget_7.setObjectName("verticalLayoutWidget_7")
         self.ObjectiveLayout = QtWidgets.QVBoxLayout(self.verticalLayoutWidget_7)
         self.ObjectiveLayout.setContentsMargins(0, 0, 0, 0)
@@ -550,25 +778,32 @@ class Ui_MainWindow(object):
         self.instructionsLabel.setObjectName("instructionsLabel")
         self.ObjectiveLayout.addWidget(self.instructionsLabel)
         self.currentGoalLabel = QtWidgets.QLabel(self.verticalLayoutWidget_7)
+        self.currentGoalLabel.setAlignment(QtCore.Qt.AlignBottom|QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft)
         self.currentGoalLabel.setWordWrap(True)
         self.currentGoalLabel.setObjectName("currentGoalLabel")
         self.ObjectiveLayout.addWidget(self.currentGoalLabel)
+        self.secondaryGoalLabel = QtWidgets.QLabel(self.verticalLayoutWidget_7)
+        self.secondaryGoalLabel.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignTop)
+        self.secondaryGoalLabel.setObjectName("secondaryGoalLabel")
+        self.ObjectiveLayout.addWidget(self.secondaryGoalLabel)
+        self.currentStatusLabel = QtWidgets.QLabel(self.verticalLayoutWidget_7)
+        self.currentStatusLabel.setText("")
+        self.currentStatusLabel.setObjectName("currentStatusLabel")
+        self.ObjectiveLayout.addWidget(self.currentStatusLabel)
         self.verticalLayoutWidget_8 = QtWidgets.QWidget(self.centralwidget)
-        self.verticalLayoutWidget_8.setGeometry(QtCore.QRect(260, -1, 31, 351))
+        self.verticalLayoutWidget_8.setGeometry(QtCore.QRect(260, 19, 31, 351))
         self.verticalLayoutWidget_8.setObjectName("verticalLayoutWidget_8")
         self.VolumeLayout = QtWidgets.QVBoxLayout(self.verticalLayoutWidget_8)
         self.VolumeLayout.setContentsMargins(0, 0, 0, 0)
         self.VolumeLayout.setObjectName("VolumeLayout")
-        self.label_3 = QtWidgets.QLabel(self.verticalLayoutWidget_8)
-        self.label_3.setObjectName("label_3")
-        self.VolumeLayout.addWidget(self.label_3)
         self.volumeSlider = QtWidgets.QSlider(self.verticalLayoutWidget_8)
-        self.volumeSlider.setSliderPosition(75)
+        self.volumeSlider.setProperty("value", 10)
+        self.volumeSlider.setSliderPosition(10)
         self.volumeSlider.setOrientation(QtCore.Qt.Vertical)
         self.volumeSlider.setObjectName("volumeSlider")
         self.VolumeLayout.addWidget(self.volumeSlider)
         self.horizontalLayoutWidget = QtWidgets.QWidget(self.centralwidget)
-        self.horizontalLayoutWidget.setGeometry(QtCore.QRect(0, 0, 31, 351))
+        self.horizontalLayoutWidget.setGeometry(QtCore.QRect(0, 20, 31, 351))
         self.horizontalLayoutWidget.setObjectName("horizontalLayoutWidget")
         self.horizontalLayout = QtWidgets.QHBoxLayout(self.horizontalLayoutWidget)
         self.horizontalLayout.setContentsMargins(0, 0, 0, 0)
@@ -576,41 +811,107 @@ class Ui_MainWindow(object):
         spacerItem = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
         self.horizontalLayout.addItem(spacerItem)
         self.horizontalLayoutWidget_2 = QtWidgets.QWidget(self.centralwidget)
-        self.horizontalLayoutWidget_2.setGeometry(QtCore.QRect(950, 0, 31, 351))
+        self.horizontalLayoutWidget_2.setGeometry(QtCore.QRect(950, 20, 31, 351))
         self.horizontalLayoutWidget_2.setObjectName("horizontalLayoutWidget_2")
         self.horizontalLayout_2 = QtWidgets.QHBoxLayout(self.horizontalLayoutWidget_2)
         self.horizontalLayout_2.setContentsMargins(0, 0, 0, 0)
         self.horizontalLayout_2.setObjectName("horizontalLayout_2")
-        MainWindow.setCentralWidget(self.centralwidget)
-        self.menubar = QtWidgets.QMenuBar(MainWindow)
-        self.menubar.setGeometry(QtCore.QRect(0, 0, 995, 22))
+        self.verticalLayoutWidget_2 = QtWidgets.QWidget(self.centralwidget)
+        self.verticalLayoutWidget_2.setGeometry(QtCore.QRect(30, 0, 121, 21))
+        self.verticalLayoutWidget_2.setObjectName("verticalLayoutWidget_2")
+        self.verticalLayout = QtWidgets.QVBoxLayout(self.verticalLayoutWidget_2)
+        self.verticalLayout.setContentsMargins(0, 0, 0, 0)
+        self.verticalLayout.setObjectName("verticalLayout")
+        self.label = QtWidgets.QLabel(self.verticalLayoutWidget_2)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Minimum)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.label.sizePolicy().hasHeightForWidth())
+        self.label.setSizePolicy(sizePolicy)
+        self.label.setAlignment(QtCore.Qt.AlignHCenter|QtCore.Qt.AlignTop)
+        self.label.setObjectName("label")
+        self.verticalLayout.addWidget(self.label)
+        self.verticalLayoutWidget_9 = QtWidgets.QWidget(self.centralwidget)
+        self.verticalLayoutWidget_9.setGeometry(QtCore.QRect(150, 0, 71, 21))
+        self.verticalLayoutWidget_9.setObjectName("verticalLayoutWidget_9")
+        self.verticalLayout_2 = QtWidgets.QVBoxLayout(self.verticalLayoutWidget_9)
+        self.verticalLayout_2.setContentsMargins(0, 0, 0, 0)
+        self.verticalLayout_2.setObjectName("verticalLayout_2")
+        self.optionsLabel = QtWidgets.QLabel(self.verticalLayoutWidget_9)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Minimum)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.optionsLabel.sizePolicy().hasHeightForWidth())
+        self.optionsLabel.setSizePolicy(sizePolicy)
+        self.optionsLabel.setMaximumSize(QtCore.QSize(16777215, 19))
+        self.optionsLabel.setAlignment(QtCore.Qt.AlignHCenter|QtCore.Qt.AlignTop)
+        self.optionsLabel.setObjectName("optionsLabel")
+        self.verticalLayout_2.addWidget(self.optionsLabel)
+        self.verticalLayoutWidget_10 = QtWidgets.QWidget(self.centralwidget)
+        self.verticalLayoutWidget_10.setGeometry(QtCore.QRect(220, 0, 101, 21))
+        self.verticalLayoutWidget_10.setObjectName("verticalLayoutWidget_10")
+        self.verticalLayout_3 = QtWidgets.QVBoxLayout(self.verticalLayoutWidget_10)
+        self.verticalLayout_3.setContentsMargins(0, 0, 0, 0)
+        self.verticalLayout_3.setObjectName("verticalLayout_3")
+        self.label_3 = QtWidgets.QLabel(self.verticalLayoutWidget_10)
+        self.label_3.setAlignment(QtCore.Qt.AlignCenter)
+        self.label_3.setObjectName("label_3")
+        self.verticalLayout_3.addWidget(self.label_3)
+        self.verticalLayoutWidget_11 = QtWidgets.QWidget(self.centralwidget)
+        self.verticalLayoutWidget_11.setGeometry(QtCore.QRect(760, 0, 191, 21))
+        self.verticalLayoutWidget_11.setObjectName("verticalLayoutWidget_11")
+        self.verticalLayout_4 = QtWidgets.QVBoxLayout(self.verticalLayoutWidget_11)
+        self.verticalLayout_4.setContentsMargins(0, 0, 0, 0)
+        self.verticalLayout_4.setObjectName("verticalLayout_4")
+        self.label_4 = QtWidgets.QLabel(self.verticalLayoutWidget_11)
+        self.label_4.setAlignment(QtCore.Qt.AlignCenter)
+        self.label_4.setObjectName("label_4")
+        self.verticalLayout_4.addWidget(self.label_4)
+        self.verticalLayoutWidget_12 = QtWidgets.QWidget(self.centralwidget)
+        self.verticalLayoutWidget_12.setGeometry(QtCore.QRect(430, 0, 161, 21))
+        self.verticalLayoutWidget_12.setObjectName("verticalLayoutWidget_12")
+        self.verticalLayout_5 = QtWidgets.QVBoxLayout(self.verticalLayoutWidget_12)
+        self.verticalLayout_5.setContentsMargins(0, 0, 0, 0)
+        self.verticalLayout_5.setObjectName("verticalLayout_5")
+        self.label_2 = QtWidgets.QLabel(self.verticalLayoutWidget_12)
+        self.label_2.setAlignment(QtCore.Qt.AlignCenter)
+        self.label_2.setObjectName("label_2")
+        self.verticalLayout_5.addWidget(self.label_2)
+        BassBot.setCentralWidget(self.centralwidget)
+        self.menubar = QtWidgets.QMenuBar(BassBot)
+        self.menubar.setGeometry(QtCore.QRect(0, 0, 987, 22))
         self.menubar.setObjectName("menubar")
-        MainWindow.setMenuBar(self.menubar)
-        self.statusbar = QtWidgets.QStatusBar(MainWindow)
+        BassBot.setMenuBar(self.menubar)
+        self.statusbar = QtWidgets.QStatusBar(BassBot)
         self.statusbar.setObjectName("statusbar")
-        MainWindow.setStatusBar(self.statusbar)
+        BassBot.setStatusBar(self.statusbar)
 
-        self.retranslateUi(MainWindow)
-        QtCore.QMetaObject.connectSlotsByName(MainWindow)
+        self.retranslateUi(BassBot)
+        QtCore.QMetaObject.connectSlotsByName(BassBot)
 ################################################################################
 #END PYUIC5 SECTION
 ################################################################################
+        # Set up sounds
+        self.clickSound = mixer.Sound(CLICK_SOUND)
+        self.rightSound = mixer.Sound(RIGHT_SOUND)
+        self.wrongSound = mixer.Sound(WRONG_SOUND)
+
         # Set up the metronome
-        self.clickSound = mixer.Sound('click.wav')
         self.metroButton.clicked.connect(self.metroClicked)
         self.metroTimer = QTimer(timerType=Qt.PreciseTimer)
         self.metroTimer.timeout.connect(self.metroTimeout)
         self.metroIsPlaying = False
         self.metroBpmDial.valueChanged.connect(self.metroDialChanged)
 
-        self.volumeSlider.valueChanged.connect(self.volumeChanged)
-        self.globalVolume = self.volumeSlider.value() / 100.0
+        # If we're in chord mode, then the metronome will also key off the
+        # chord transitions
+        self.chordTimer = QTimer(timerType=Qt.PreciseTimer)
+        self.chordTimer.timeout.connect(self.chordTimeout)
 
-        # Set up the note processing loop
-        #self.noteTimer = QTimer()
-        #self.noteTimer.timeout.connect(self.sampleNote)
-        #self.noteTimer.start(0)
-        #self.aHandler = AudioHandler()
+        # Handle the volume bar
+        self.volumeSlider.valueChanged.connect(self.volumeChanged)
+        self.volumeSlider.sliderReleased.connect(self.volumeReleased)
+        self.globalVolume = self.volumeSlider.value() / 100.0
 
         # Set up the worker thread for note handling
         self.thread = QThread()
@@ -628,6 +929,7 @@ class Ui_MainWindow(object):
         self.currentExercise = 0
         self.exerciseRadioFrets.clicked.connect(self.exerciseClicked)
         self.exerciseRadioChords.clicked.connect(self.exerciseClicked)
+        self.exerciseRadioFreePlay.clicked.connect(self.exerciseClicked)
         self.exerciseRadioFrets.setChecked(True)
         self.levelRadio1.clicked.connect(lambda: self.levelClicked(1))
         self.levelRadio2.clicked.connect(lambda: self.levelClicked(2))
@@ -636,34 +938,50 @@ class Ui_MainWindow(object):
         self.levelRadio1.setChecked(True)
         self.exerciseClicked()
 
-    def retranslateUi(self, MainWindow):
+    def retranslateUi(self, BassBot):
         _translate = QtCore.QCoreApplication.translate
-        MainWindow.setWindowTitle(_translate("MainWindow", "MainWindow"))
-        self.label.setText(_translate("MainWindow", "Level"))
-        self.exerciseRadioFrets.setText(_translate("MainWindow", "Fret Finder"))
-        self.exerciseRadioChords.setText(_translate("MainWindow", "Chord Shapes"))
-        self.TunerNote.setText(_translate("MainWindow", "Note: "))
-        self.metroBpmLabel.setText(_translate("MainWindow", "BPM: " + str(self.metroBpmDial.value())))
-        self.metroLabel.setText(_translate("MainWindow", "Metronome Stopped"))
-        self.metroButton.setText(_translate("MainWindow", "Start/Stop"))
-        self.optionsLabel.setText(_translate("MainWindow", "Options"))
-        self.levelRadio1.setText(_translate("MainWindow", "Level 1"))
-        self.levelRadio2.setText(_translate("MainWindow", "Level 2"))
-        self.levelRadio3.setText(_translate("MainWindow", "Level 3"))
-        self.levelRadio4.setText(_translate("MainWindow", "Level 4"))
-        self.instructionsLabel.setText(_translate("MainWindow", "Instructions for level here"))
-        self.currentGoalLabel.setText(_translate("MainWindow", "Current note/shape/whateves here"))
-        self.label_3.setText(_translate("MainWindow", "Vol"))
+        BassBot.setWindowTitle(_translate("BassBot", "BassBot"))
+        self.exerciseRadioFrets.setText(_translate("BassBot", "Fret Finder"))
+        self.exerciseRadioChords.setText(_translate("BassBot", "Chord Shapes"))
+        self.exerciseRadioFreePlay.setText(_translate("BassBot", "Free Play"))
+        self.TunerNote.setText(_translate("BassBot", "Note: "))
+        self.metroBpmLabel.setText(_translate("BassBot", "BPM: " + str(self.metroBpmDial.value())))
+        self.metroLabel.setText(_translate("BassBot", "Metronome Stopped"))
+        self.metroButton.setText(_translate("BassBot", "Start/Stop"))
+        self.levelRadio1.setText(_translate("BassBot", "Level 1"))
+        self.levelRadio2.setText(_translate("BassBot", "Level 2"))
+        self.levelRadio3.setText(_translate("BassBot", "Level 3"))
+        self.levelRadio4.setText(_translate("BassBot", "Level 4"))
+        self.instructionsLabel.setText(_translate("BassBot", "Instructions for level here"))
+        self.currentGoalLabel.setText(_translate("BassBot", "Current note/shape/whateves here"))
+        self.secondaryGoalLabel.setText(_translate("BassBot", "Arpeggio order/current chord here"))
+        self.label.setText(_translate("BassBot", "Exercise"))
+        self.optionsLabel.setText(_translate("BassBot", "Level"))
+        self.label_3.setText(_translate("BassBot", "Volume"))
+        self.label_4.setText(_translate("BassBot", "Metronome"))
+        self.label_2.setText(_translate("BassBot", "Objective"))
 
     def levelClicked(self, level):
         if self.exerciseRadioFrets.isChecked():
             self.currentExercise = fretFinder(level)
             self.instructionsLabel.setText(self.currentExercise.getInstructions())
             self.currentGoalLabel.setText(self.currentExercise.getGoal())
-        else:
+            self.secondaryGoalLabel.setText(self.currentExercise.getSecondaryGoal())
+            self.currentStatusLabel.setText(self.currentExercise.getStatus())
+            self.currentExercise.set_volume(self.volumeSlider.value() / 100.0)
+        elif self.exerciseRadioChords.isChecked():
             self.currentExercise = chordFinder(level)
             self.instructionsLabel.setText(self.currentExercise.getInstructions())
             self.currentGoalLabel.setText(self.currentExercise.getGoal())
+            self.secondaryGoalLabel.setText(self.currentExercise.getSecondaryGoal())
+            self.currentStatusLabel.setText(self.currentExercise.getStatus())
+            self.currentExercise.set_volume(self.volumeSlider.value() / 100.0)
+        else: #if self.exerciseRadioFreePlay.isChecked():
+            self.currentExercise = freePlay(level)
+            self.currentExercise.set_volume(self.volumeSlider.value() / 100.0)
+            self.instructionsLabel.setText(self.currentExercise.getInstructions())
+            self.currentGoalLabel.setText(self.currentExercise.getGoal())
+            self.secondaryGoalLabel.setText(self.currentExercise.getSecondaryGoal())
 
     def exerciseClicked(self):
         if self.levelRadio1.isChecked():
@@ -678,35 +996,58 @@ class Ui_MainWindow(object):
             level = 1
         if self.exerciseRadioFrets.isChecked():
             self.currentExercise = fretFinder(level)
+            self.currentExercise.set_volume(self.volumeSlider.value() / 100.0)
             self.instructionsLabel.setText(self.currentExercise.getInstructions())
             self.currentGoalLabel.setText(self.currentExercise.getGoal())
-        else:
+            self.secondaryGoalLabel.setText(self.currentExercise.getSecondaryGoal())
+            self.chordTimer.stop()
+        elif self.exerciseRadioChords.isChecked():
             self.currentExercise = chordFinder(level)
+            self.currentExercise.set_volume(self.volumeSlider.value() / 100.0)
             self.instructionsLabel.setText(self.currentExercise.getInstructions())
             self.currentGoalLabel.setText(self.currentExercise.getGoal())
+            self.secondaryGoalLabel.setText(self.currentExercise.getSecondaryGoal())
+            self.chordTimer.stop()
+        else: #if self.exerciseRadioFreePlay.isChecked():
+            self.currentExercise = freePlay(level)
+            self.currentExercise.set_volume(self.volumeSlider.value() / 100.0)
+            self.instructionsLabel.setText(self.currentExercise.getInstructions())
+            self.currentGoalLabel.setText(self.currentExercise.getGoal())
+            self.secondaryGoalLabel.setText(self.currentExercise.getSecondaryGoal())
+
+    def volumeReleased(self):
+        self.volumeChanged()
+        self.rightSound.play()
 
     def volumeChanged(self):
-        #self.globalVolume = self.volumeSlider.value() / 100.0
-        #print("new gVol: " + str(self.globalVolume))
         vol = self.volumeSlider.value() / 100.0
         self.clickSound.set_volume(vol)
+        self.rightSound.set_volume(vol)
+        self.wrongSound.set_volume(vol)
+        self.currentExercise.set_volume(vol)
 
     def metroDialChanged(self):
         self.metroBpmLabel.setText("BPM: " + str(self.metroBpmDial.value()))
 
     def metroClicked(self):
         self.metroLabel.setText("button pressed!")
-        print("current bpm: " + str(self.metroBpmDial.value()))
         msDelay = int(60000.0/self.metroBpmDial.value())
-        print("ms wait: " + str(msDelay))
 
         if self.metroIsPlaying == True:
             self.metroIsPlaying = False
             self.metroTimer.stop()
+            self.chordTimer.stop()
+            if self.exerciseRadioFreePlay.isChecked():
+                self.currentExercise.setNewGoal()
+                self.secondaryGoalLabel.setText(self.currentExercise.getSecondaryGoal())
             self.metroLabel.setText("metronome off")
         else:
             self.metroIsPlaying = True
             self.metroTimer.start(msDelay)
+            if self.exerciseRadioFreePlay.isChecked():
+                # Eventually, this will be based on time signature and num bars
+                # The first time, subtract one to count the init click
+                self.chordTimer.start((msDelay * 4) - 1)
             self.clickSound.play()
             self.metroLabel.setText("metronome on")
 
@@ -715,6 +1056,13 @@ class Ui_MainWindow(object):
         self.metroTimer.start(msDelay)
         self.clickSound.play()
 
+    def chordTimeout(self):
+        msDelay = int(60000.0/self.metroBpmDial.value())
+        self.chordTimer.start((msDelay * 4 * 2) - 1)
+        if self.exerciseRadioFreePlay.isChecked():
+            self.currentExercise.advanceChord()
+            self.secondaryGoalLabel.setText(self.currentExercise.getSecondaryGoal())
+
     def reportNote(self, note):
         self.TunerNote.setText("Note: " + str(note))
 
@@ -722,6 +1070,8 @@ class Ui_MainWindow(object):
             if self.currentExercise.evaluateNote(note):
                 self.instructionsLabel.setText(self.currentExercise.getInstructions())
                 self.currentGoalLabel.setText(self.currentExercise.getGoal())
+                self.secondaryGoalLabel.setText(self.currentExercise.getSecondaryGoal())
+            self.currentStatusLabel.setText(self.currentExercise.getStatus())
 
 if __name__ == "__main__":
     import sys
@@ -730,8 +1080,28 @@ if __name__ == "__main__":
     mixer.init()
 
     app = QtWidgets.QApplication(sys.argv)
-    MainWindow = QtWidgets.QMainWindow()
-    ui = Ui_MainWindow()
-    ui.setupUi(MainWindow)
-    MainWindow.show()
+
+    app.setStyle('Fusion') #Style needed for palette to work
+    # Dark Palette (found on github, couldn't track the original author)
+    default_palette = QPalette()
+    dark_palette = QPalette()
+    dark_palette.setColor(QPalette.Window, QColor(53, 53, 53))
+    dark_palette.setColor(QPalette.WindowText, Qt.white)
+    dark_palette.setColor(QPalette.Base, QColor(25, 25, 25))
+    dark_palette.setColor(QPalette.AlternateBase, QColor(53, 53, 53))
+    dark_palette.setColor(QPalette.ToolTipBase, Qt.white)
+    dark_palette.setColor(QPalette.ToolTipText, Qt.white)
+    dark_palette.setColor(QPalette.Text, Qt.white)
+    dark_palette.setColor(QPalette.Button, QColor(53, 53, 53))
+    dark_palette.setColor(QPalette.ButtonText, Qt.white)
+    dark_palette.setColor(QPalette.BrightText, Qt.red)
+    dark_palette.setColor(QPalette.Link, QColor(42, 130, 218))
+    dark_palette.setColor(QPalette.Highlight, QColor(42, 130, 218))
+    dark_palette.setColor(QPalette.HighlightedText, Qt.black)
+    app.setPalette(dark_palette)
+
+    BassBot = QtWidgets.QMainWindow()
+    ui = Ui_BassBot()
+    ui.setupUi(BassBot)
+    BassBot.show()
     sys.exit(app.exec_())
