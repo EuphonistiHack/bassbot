@@ -6,12 +6,12 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>987</width>
-    <height>417</height>
+    <width>1074</width>
+    <height>540</height>
    </rect>
   </property>
   <property name="windowTitle">
-   <string>MainWindow</string>
+   <string>BassBot</string>
   </property>
   <widget class="QWidget" name="centralwidget">
    <widget class="QWidget" name="verticalLayoutWidget">
@@ -25,6 +25,13 @@
     </property>
     <layout class="QVBoxLayout" name="ExerciseLayout">
      <item>
+      <widget class="QRadioButton" name="exerciseRadioTuner">
+       <property name="text">
+        <string>Tuner</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QRadioButton" name="exerciseRadioFrets">
        <property name="text">
         <string>Fret Finder</string>
@@ -35,6 +42,13 @@
       <widget class="QRadioButton" name="exerciseRadioChords">
        <property name="text">
         <string>Chord Shapes</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QRadioButton" name="exerciseRadioNash">
+       <property name="text">
+        <string>Nashville Notation</string>
        </property>
       </widget>
      </item>
@@ -51,9 +65,9 @@
     <property name="geometry">
      <rect>
       <x>761</x>
-      <y>210</y>
+      <y>230</y>
       <width>191</width>
-      <height>161</height>
+      <height>141</height>
      </rect>
     </property>
     <layout class="QVBoxLayout" name="TunerLayout">
@@ -63,7 +77,17 @@
         <string>Note: </string>
        </property>
        <property name="alignment">
-        <set>Qt::AlignCenter</set>
+        <set>Qt::AlignBottom|Qt::AlignHCenter</set>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="TunerOffBy">
+       <property name="text">
+        <string>Tuning</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignHCenter|Qt::AlignTop</set>
        </property>
       </widget>
      </item>
@@ -432,14 +456,36 @@
      </item>
     </layout>
    </widget>
+   <widget class="QWidget" name="verticalLayoutWidget_13">
+    <property name="geometry">
+     <rect>
+      <x>760</x>
+      <y>210</y>
+      <width>191</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <layout class="QVBoxLayout" name="verticalLayout_6">
+     <item>
+      <widget class="QLabel" name="TunerLabel">
+       <property name="text">
+        <string>Tuner</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignCenter</set>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </widget>
   </widget>
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>987</width>
-     <height>22</height>
+     <width>1074</width>
+     <height>21</height>
     </rect>
    </property>
   </widget>

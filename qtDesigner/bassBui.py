@@ -24,8 +24,10 @@ from threading import Thread, Event
 import argparse
 import random
 import datetime
+import time
 
 NOTE_NAMES = 'C C# D D# E F F# G G# A A# B'.split()
+NUM_NOTES = 12
 
 # Track all the notes on a per-fret basis. <n>_NOTES will give you the note by
 # fret.  0 is open, 1 is first fret, etc.
@@ -56,10 +58,32 @@ DOM7_SHAPE = [[1,-1], [1,2], [2,0], [2,2]]
 MINOR7_SHAPE = [[1,-2], [1,2], [2,0], [2,2]]
 MINOR7FLAT5_SHAPE = [[1,-2], [1,1], [2,0], [2,2]]
 SHAPE_LIST = [MAJOR7_SHAPE, DOM7_SHAPE, MINOR7_SHAPE, MINOR7FLAT5_SHAPE]
+#I hate the way I did the above, so trying something new for Nashville
+
+# For major: 2 2 1 2 2 2 1
+#     minor: 2 1 2 2 1 2 2
+#     dim:   1 2 1 2 1 2 1
+MAJOR_SCALE_IDX = [2, 2, 1, 2, 2, 2, 1]
+MINOR_SCALE_IDX = [2, 1, 2, 2, 1, 2, 2]
+DIM_SCALE_IDX = [1, 2, 1, 2, 1, 2, 1]
+
+#whole whole half whole whole whole half
+SCALE_IDX = [2, 2, 1, 2, 2, 2, 1]
+#major, minor, minor, major, major, minor, dimninished, major
+NASH_SHAPE_IDX = ['major 7',
+                  'minor 7',
+                  'minor 7',
+                  'major 7',
+                  'major 7',
+                  'minor 7',
+                  'dom 7',
+                  'major 7']
 
 WRONG_SOUND = 'custWrong.ogg'
 RIGHT_SOUND = 'custRight.ogg'
 CLICK_SOUND = 'click.wav'
+HI_CLICK_SOUND = 'hiClick.ogg'
+LO_CLICK_SOUND = 'loClick.ogg'
 
 ROBOT = """
 ~~~~~~~~~~BASSBOT~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -92,6 +116,47 @@ SAMPLE_RATE             = 44100
 HOP_SIZE                = BUFFER_SIZE//2
 PERIOD_SIZE_IN_FRAME    = HOP_SIZE
 
+# Given a note, ex "C", return its idx in NOTE_NAMES
+def getNoteIdx(note):
+    return NOTE_NAMES.index(note)
+
+# Takes in note index from NOTE_NAME, adds toAdd, and wraps around if
+# result is more than 11
+def addNotes(note, toAdd):
+    return (note + toAdd) % 12
+
+# Given a root, ex "C", a note, ex 3, and a scale list, ex MAJOR_SCALE_IDX,
+# return the note, ex "E" found at position <note> of that scale
+def getNoteOfScale(root, note, scaleList):
+    rootIdx = getNoteIdx(root)
+    offset = sum(scaleList[0:(note - 1)])
+    offset = addNotes(rootIdx, offset)
+    return NOTE_NAMES[offset]
+
+# Given a root, ex "C", and a scale list, ex MAJOR_SCALE_IDX, return a list of
+# strings representing the 1-3-5 arpeggio
+def getArpeggio(note, scaleList, arpList):
+    noteIdx = getNoteIdx(note)
+    retVal = []
+    for index in arpList:
+        retVal.append(getNoteOfScale(note, index, scaleList))
+    return retVal
+
+# Given a key, ex "C", and a Nashville number, get the arpeggio
+def getArpeggioFromScale(key, number, arpList = [1,3,5,3,1]):
+    chordType = NASH_SHAPE_IDX[number - 1]
+    root = getNoteOfScale(key, number, MAJOR_SCALE_IDX)
+    print("  " + root + " " + chordType)
+    if chordType == 'major 7':
+        return getArpeggio(root, MAJOR_SCALE_IDX, arpList)
+    elif chordType == 'minor 7':
+        return getArpeggio(root, MINOR_SCALE_IDX, arpList)
+    elif chordType == 'dom 7':
+        return getArpeggio(root, DIM_SCALE_IDX, arpList)
+    else:
+        print("unknown chord type: " + chordType)
+        return ['']
+
 class sessionInfo:
     """Track performance statics through playing"""
     numRight = 0
@@ -109,13 +174,16 @@ class AudioHandler:
     """Set up mic input, take samples when tick is called, provide freq and vol"""
 
     def __init__(self):
-         # Initiating PyAudio object.
+        print("1")
+         # Initiating PyAudio object.14
         pA = pyaudio.PyAudio()
         # Open the microphone stream.
+        print("2")
         self.mic = pA.open(format=FORMAT, channels=CHANNELS,
                 rate=SAMPLE_RATE, input=True,
                 frames_per_buffer=PERIOD_SIZE_IN_FRAME)
 
+        print("3")
         # Initiating Aubio's pitch detection object.
         self.pDetection = aubio.pitch(METHOD, BUFFER_SIZE,
             HOP_SIZE, SAMPLE_RATE)
@@ -123,7 +191,7 @@ class AudioHandler:
         self.pDetection.set_unit("Hz")
         # Frequency under -40 dB will considered
         # as a silence.
-        self.pDetection.set_silence(-30)
+        self.pDetection.set_silence(-50)
 
     def processAudio(self):
         # Always listening to the microphone.
@@ -145,9 +213,17 @@ class freePlay():
     """Exercise for playing in the right key for the right amount of time"""
     def getInstructions(self):
         if self.level == 1:
-            return "Level 1: Play in the chord's arpeggio 2 bars, then move to next chord"
+            ret = "Level 1\n"
+            ret += "\tPlay any notes in the listed chord's arepggio for 2 bars,\n"
+            ret += "\tthen move to the next chord.\n\n"
+            ret += "Start the metronome to begin."
+            return ret
         elif self.level == 2:
-            return "Level 2: Play in the chord's scale 2 bars, then move to next chord"
+            ret = "Level 2\n"
+            ret += "\tPlay any notes in the listed chord's scale for 2 bars,\n"
+            ret += "\tthen move to the next chord.\n\n"
+            ret += "Start the metronome to begin."
+            return ret
         else:
             return "There is no cow level"
 
@@ -241,14 +317,6 @@ class freePlay():
         else:
             return "ERRRRROR!"
 
-    # Takes in note index from NOTE_NAME, adds toAdd, and wraps around if
-    # result is more than 11
-    def addNotes(self, note, toAdd):
-        return (note + toAdd) % 12
-
-    def getNoteIdx(self, note):
-        return NOTE_NAMES.index(note)
-
     # Set the current Valid list based on the current root chord.
     # Root chord will be in the format CM, CD, Cm, Cb
     def getArpeggios(self, root):
@@ -261,27 +329,27 @@ class freePlay():
         #   arpeggio list will be rootIdx, +4, +7, +11
         noteName = root[:-1]
         keyCode = root[-1]
-        rootIdx = self.getNoteIdx(noteName)
+        rootIdx = getNoteIdx(noteName)
 
         print("rootidx: " + str(rootIdx))
 
         self.currentValid = [noteName]
         if keyCode == "M":
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 4)]
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 7)]
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 11)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 4)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 7)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 11)]
         elif keyCode == "D":
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 4)]
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 7)]
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 10)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 4)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 7)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 10)]
         elif keyCode == "m":
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 3)]
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 7)]
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 10)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 3)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 7)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 10)]
         elif keyCode == "b":
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 3)]
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 6)]
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 10)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 3)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 6)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 10)]
         else:
             print("Error in getting arpeggios!!")
 
@@ -291,37 +359,37 @@ class freePlay():
         # Need to figure out all the options for this fella
         noteName = root[:-1]
         keyCode = root[-1]
-        rootIdx = self.getNoteIdx(noteName)
+        rootIdx = getNoteIdx(noteName)
 
         self.currentValid = [noteName]
         if keyCode == "M":
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 2)]
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 4)]
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 5)]
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 7)]
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 9)]
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 11)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 2)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 4)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 5)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 7)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 9)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 11)]
         elif keyCode == "D":
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 2)]
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 4)]
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 5)]
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 7)]
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 9)]
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 10)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 2)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 4)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 5)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 7)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 9)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 10)]
         elif keyCode == "m":
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 2)]
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 3)]
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 5)]
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 7)]
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 9)]
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 10)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 2)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 3)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 5)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 7)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 9)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 10)]
         elif keyCode == "b":
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 2)]
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 3)]
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 5)]
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 6)]
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 9)]
-            self.currentValid += NOTE_NAMES[self.addNotes(rootIdx, 10)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 2)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 3)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 5)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 6)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 9)]
+            self.currentValid += NOTE_NAMES[addNotes(rootIdx, 10)]
         else:
             print("Error in getting scale notes!")
 
@@ -351,6 +419,164 @@ class freePlay():
         self.wrongSound.play()
         return True
 
+class nashville():
+    """Handle instructions, goals, and evaluations for Nashville exercises"""
+    def getInstructions(self):
+        if self.level == 1:
+            return "Level 1: Play 1-3-5 of each chord in the key of Cmaj"
+        elif self.level == 2:
+            return "Level 2: Play the 1-3-5 on a random chord in the key of Cmaj"
+        elif self.level == 3:
+            return "Level 3: Play 1-3-5 of each chord in a random major key"
+        elif self.level == 4:
+            return "Level 4: Play 1-3-5 of a random chord in a random major key"
+        elif self.level == 5:
+            return "Level 5: Pizza time!"
+        else:
+            print("DEV MADE AN OOPS IN FRETFINDER, GETINSTRUCTIONS!!!!")
+            return "DEV MADE AN OOPS IN FRETFINDER, GETINSTRUCTIONS!!!!"
+
+    def __init__(self, level = 1, lastNote = ''):
+        self.level = level
+        self.toPlay = lastNote
+        self.ignoreNote = lastNote
+        self.numRight = 0
+        self.numWrong = 0
+        self.rightSound = mixer.Sound(RIGHT_SOUND)
+        self.wrongSound = mixer.Sound(WRONG_SOUND)
+
+        self.chordTones = []
+        for i in range(5):
+            self.chordTones.append('')
+        self.noteIdx = 0
+        self.numberIdx = 0
+
+        self.setNewGoal()
+        self.status = ''
+
+    def set_volume(self, volume):
+        self.rightSound.set_volume(volume)
+        self.wrongSound.set_volume(volume)
+
+    def getStatus(self):
+        return self.status
+
+    def getSecondaryGoal(self):
+        return self.secondaryGoal
+
+    def getGoal(self):
+        print("curr goal: " + self.goal)
+        return self.goal
+
+    def setNewGoal(self):
+        self.key = ''
+        self.secondaryGoal = ''
+        self.order = [1, 3, 5, 3, 1]
+        if self.level == 1:
+            self.key = 'C'
+            self.numbers = [1, 2, 3, 4, 5, 6, 7, 8]
+        elif self.level == 2:
+            self.key = 'C'
+            self.numbers = [1 + random.randrange(7)]
+        elif self.level == 3:
+            self.key = NOTE_NAMES[random.randrange(12)]
+            self.numbers = [1, 2, 3, 4, 5, 6, 7, 8]
+        elif self.level == 4:
+            self.key = NOTE_NAMES[random.randrange(12)]
+            self.numbers = [1 + random.randrange(7)]
+        elif self.level == 5:
+            print("PIZZA PIZZA")
+
+        self.goal = "Key of: " + self.key + "\n"
+        self.goal += "Play the " + str(self.numbers[0])
+
+        self.secondaryGoal += "Order: "
+        self.secondaryGoal += str(self.order[0]) + " "
+        self.noteIdx = 0;
+
+        self.numIdx = 0
+        currentChordType = NASH_SHAPE_IDX[self.numbers[self.numIdx]-1]
+        self.currentNumber = self.numbers[self.numIdx]
+        self.currentArp = getArpeggioFromScale(self.key, self.currentNumber)
+        self.arpIdx = 0
+
+    def getArpFromIdx(self, arpIdx):
+        if arpIdx == 0:
+            return 1
+        elif arpIdx == 1:
+            return 3
+        elif arpIdx == 2:
+            return 5
+        elif arpIdx == 3:
+            return 3
+        elif arpIdx == 4:
+            return 1
+        return 9999
+
+    def evaluateNote(self, playedNote):
+        # if this is a note we're ignoring, do nothing
+        if (playedNote == self.ignoreNote):
+            return False
+
+        # if this is a mute note, clear the ignore list and do nothing
+        if playedNote == 'none':
+            self.ignoreNote = playedNote
+            return False
+
+        self.ignoreNote = playedNote
+        # Strip the number from the end of the ntoe
+        playedNote = playedNote[:-1]
+
+        self.toPlay = self.currentArp[self.arpIdx]
+        print("toPlay: " + str(self.toPlay))
+
+        if playedNote == self.toPlay:
+            self.numRight += 1
+            print("correct on idx" + str(self.arpIdx))
+            self.arpIdx += 1
+
+            if self.arpIdx >= len(self.currentArp):
+                # If that was the last note in the arpeggio, move to the next
+                # number
+                print("arp for note " + str(self.currentNumber) + " complete")
+                self.numIdx += 1
+                if self.numIdx >= len(self.numbers):
+                    # If that was the last number, exercise is done
+                    print("exercise complete!")
+                    self.setNewGoal()
+                    self.status = ""
+                    self.rightSound.play()
+                    return True
+                else:
+                    # Otherwise, reset arp idx and move to the next number
+                    self.rightSound.play()
+                    self.arpIdx = 0
+                    currentChordType = NASH_SHAPE_IDX[self.numbers[self.numIdx]-1]
+                    self.currentNumber = self.numbers[self.numIdx]
+                    if self.numIdx == 7:
+                        self.order = [1, 3, 5, 7, 8]
+                        self.currentArp = getArpeggioFromScale(self.key, self.currentNumber, self.order)
+                    else:
+                        self.currentArp = getArpeggioFromScale(self.key, self.currentNumber)
+                    self.arpIdx = 0
+                    self.goal += " " + str(self.currentNumber)
+                    self.secondaryGoal = "Order: 1"
+                    return True
+            else:
+                # If that was not the last note in the arpeggio, move to next
+                self.secondaryGoal += str(self.order[self.arpIdx]) + " "
+                print("update secondary goal?")
+                return True
+        else:
+            print("wrongzo!")
+            print("   expected " + str(self.toPlay))
+            print("   heard " + str(playedNote))
+
+            self.numWrong += 1
+            #self.status = str(self.getArpFromIdx(self.order[self.noteIdx])) + " WRONG!\n"
+            #self.status += str("expected " + str(self.toPlay) + ", heard " + str(playedNote))
+            self.wrongSound.play()
+            return True
 
 class chordFinder():
     """Handle instructions, goals, and evaluations for chordFinder exercises"""
@@ -617,6 +843,7 @@ class fretFinder():
             print("correct!  played " + str(playedNote))
             self.ignoreNote = playedNote
             self.setNewGoal()
+            self.status = ''
             self.rightSound.play()
             return True
         else:
@@ -625,16 +852,20 @@ class fretFinder():
             print("   heard " + str(playedNote))
             self.ignoreNote = playedNote
             self.numWrong += 1
-            self.goal = "WRONG!!!! " + self.goal
+
+            self.status = "WRONG!\n"
+            self.status += str("expected " + str(self.toPlay) + ", heard " + str(playedNote))
             self.wrongSound.play()
             return True
 
 class Worker (QObject):
     finished = pyqtSignal()
     progress = pyqtSignal(str)
+    tuning = pyqtSignal(float)
     confidenceLevel = 2
 
     def run(self):
+        print("testing")
         self.aHandler = AudioHandler()
         self.resultList = []
         while True:
@@ -652,6 +883,8 @@ class Worker (QObject):
             n = freq_to_number(pitch)
             n0 = int(round(n))
             name = note_name(n0)
+            tune = n - n0
+            self.tuning.emit(n-n0)
 
         # Format the volume output so it only
         # displays at most six numbers behind 0.
@@ -690,25 +923,35 @@ class Ui_BassBot(object):
         self.ExerciseLayout = QtWidgets.QVBoxLayout(self.verticalLayoutWidget)
         self.ExerciseLayout.setContentsMargins(0, 0, 0, 0)
         self.ExerciseLayout.setObjectName("ExerciseLayout")
+        self.exerciseRadioTuner = QtWidgets.QRadioButton(self.verticalLayoutWidget)
+        self.exerciseRadioTuner.setObjectName("exerciseRadioTuner")
+        self.ExerciseLayout.addWidget(self.exerciseRadioTuner)
         self.exerciseRadioFrets = QtWidgets.QRadioButton(self.verticalLayoutWidget)
         self.exerciseRadioFrets.setObjectName("exerciseRadioFrets")
         self.ExerciseLayout.addWidget(self.exerciseRadioFrets)
         self.exerciseRadioChords = QtWidgets.QRadioButton(self.verticalLayoutWidget)
         self.exerciseRadioChords.setObjectName("exerciseRadioChords")
         self.ExerciseLayout.addWidget(self.exerciseRadioChords)
+        self.exerciseRadioNash = QtWidgets.QRadioButton(self.verticalLayoutWidget)
+        self.exerciseRadioNash.setObjectName("exerciseRadioNash")
+        self.ExerciseLayout.addWidget(self.exerciseRadioNash)
         self.exerciseRadioFreePlay = QtWidgets.QRadioButton(self.verticalLayoutWidget)
         self.exerciseRadioFreePlay.setObjectName("exerciseRadioFreePlay")
         self.ExerciseLayout.addWidget(self.exerciseRadioFreePlay)
         self.verticalLayoutWidget_3 = QtWidgets.QWidget(self.centralwidget)
-        self.verticalLayoutWidget_3.setGeometry(QtCore.QRect(761, 210, 191, 161))
+        self.verticalLayoutWidget_3.setGeometry(QtCore.QRect(761, 230, 191, 141))
         self.verticalLayoutWidget_3.setObjectName("verticalLayoutWidget_3")
         self.TunerLayout = QtWidgets.QVBoxLayout(self.verticalLayoutWidget_3)
         self.TunerLayout.setContentsMargins(0, 0, 0, 0)
         self.TunerLayout.setObjectName("TunerLayout")
         self.TunerNote = QtWidgets.QLabel(self.verticalLayoutWidget_3)
-        self.TunerNote.setAlignment(QtCore.Qt.AlignCenter)
+        self.TunerNote.setAlignment(QtCore.Qt.AlignBottom|QtCore.Qt.AlignHCenter)
         self.TunerNote.setObjectName("TunerNote")
         self.TunerLayout.addWidget(self.TunerNote)
+        self.TunerOffBy = QtWidgets.QLabel(self.verticalLayoutWidget_3)
+        self.TunerOffBy.setAlignment(QtCore.Qt.AlignHCenter|QtCore.Qt.AlignTop)
+        self.TunerOffBy.setObjectName("TunerOffBy")
+        self.TunerLayout.addWidget(self.TunerOffBy)
         self.tunerScrollBar = QtWidgets.QScrollBar(self.verticalLayoutWidget_3)
         self.tunerScrollBar.setMaximum(100)
         self.tunerScrollBar.setProperty("value", 50)
@@ -877,6 +1120,16 @@ class Ui_BassBot(object):
         self.label_2.setAlignment(QtCore.Qt.AlignCenter)
         self.label_2.setObjectName("label_2")
         self.verticalLayout_5.addWidget(self.label_2)
+        self.verticalLayoutWidget_13 = QtWidgets.QWidget(self.centralwidget)
+        self.verticalLayoutWidget_13.setGeometry(QtCore.QRect(760, 210, 191, 21))
+        self.verticalLayoutWidget_13.setObjectName("verticalLayoutWidget_13")
+        self.verticalLayout_6 = QtWidgets.QVBoxLayout(self.verticalLayoutWidget_13)
+        self.verticalLayout_6.setContentsMargins(0, 0, 0, 0)
+        self.verticalLayout_6.setObjectName("verticalLayout_6")
+        self.TunerLabel = QtWidgets.QLabel(self.verticalLayoutWidget_13)
+        self.TunerLabel.setAlignment(QtCore.Qt.AlignCenter)
+        self.TunerLabel.setObjectName("TunerLabel")
+        self.verticalLayout_6.addWidget(self.TunerLabel)
         BassBot.setCentralWidget(self.centralwidget)
         self.menubar = QtWidgets.QMenuBar(BassBot)
         self.menubar.setGeometry(QtCore.QRect(0, 0, 987, 22))
@@ -891,12 +1144,30 @@ class Ui_BassBot(object):
 ################################################################################
 #END PYUIC5 SECTION
 ################################################################################
+        # Set up the worker thread for note handling
+        self.thread = QThread()
+        self.worker = Worker()
+        self.worker.moveToThread(self.thread)
+        self.thread.started.connect(self.worker.run)
+        self.worker.finished.connect(self.thread.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.worker.finished.connect(self.thread.deleteLater)
+        self.worker.progress.connect(self.reportNote)
+        self.worker.tuning.connect(self.reportTuning)
+        self.thread.start()
+        print(ROBOT)
+
         # Set up sounds
+        time.sleep(1)
+        mixer.init()
         self.clickSound = mixer.Sound(CLICK_SOUND)
+        self.hiClickSound = mixer.Sound(HI_CLICK_SOUND)
+        self.loClickSound = mixer.Sound(LO_CLICK_SOUND)
         self.rightSound = mixer.Sound(RIGHT_SOUND)
         self.wrongSound = mixer.Sound(WRONG_SOUND)
 
         # Set up the metronome
+        self.beatCount = 0
         self.metroButton.clicked.connect(self.metroClicked)
         self.metroTimer = QTimer(timerType=Qt.PreciseTimer)
         self.metroTimer.timeout.connect(self.metroTimeout)
@@ -911,26 +1182,21 @@ class Ui_BassBot(object):
         # Handle the volume bar
         self.volumeSlider.valueChanged.connect(self.volumeChanged)
         self.volumeSlider.sliderReleased.connect(self.volumeReleased)
-        self.globalVolume = self.volumeSlider.value() / 100.0
-
-        # Set up the worker thread for note handling
-        self.thread = QThread()
-        self.worker = Worker()
-        self.worker.moveToThread(self.thread)
-        self.thread.started.connect(self.worker.run)
-        self.worker.finished.connect(self.thread.quit)
-        self.worker.finished.connect(self.worker.deleteLater)
-        self.worker.finished.connect(self.thread.deleteLater)
-        self.worker.progress.connect(self.reportNote)
-        self.thread.start()
-        print(ROBOT)
+        vol = self.volumeSlider.value() / 100.0
+        self.clickSound.set_volume(vol)
+        self.hiClickSound.set_volume(vol)
+        self.loClickSound.set_volume(vol)
+        self.rightSound.set_volume(vol)
+        self.wrongSound.set_volume(vol)
 
         # Set up the level configuration
         self.currentExercise = 0
+        self.exerciseRadioTuner.clicked.connect(self.exerciseClicked)
         self.exerciseRadioFrets.clicked.connect(self.exerciseClicked)
         self.exerciseRadioChords.clicked.connect(self.exerciseClicked)
+        self.exerciseRadioNash.clicked.connect(self.exerciseClicked)
         self.exerciseRadioFreePlay.clicked.connect(self.exerciseClicked)
-        self.exerciseRadioFrets.setChecked(True)
+        self.exerciseRadioTuner.setChecked(True)
         self.levelRadio1.clicked.connect(lambda: self.levelClicked(1))
         self.levelRadio2.clicked.connect(lambda: self.levelClicked(2))
         self.levelRadio3.clicked.connect(lambda: self.levelClicked(3))
@@ -941,10 +1207,13 @@ class Ui_BassBot(object):
     def retranslateUi(self, BassBot):
         _translate = QtCore.QCoreApplication.translate
         BassBot.setWindowTitle(_translate("BassBot", "BassBot"))
+        self.exerciseRadioTuner.setText(_translate("BassBot", "Tuner"))
         self.exerciseRadioFrets.setText(_translate("BassBot", "Fret Finder"))
         self.exerciseRadioChords.setText(_translate("BassBot", "Chord Shapes"))
+        self.exerciseRadioNash.setText(_translate("BassBot", "Nashville Notation"))
         self.exerciseRadioFreePlay.setText(_translate("BassBot", "Free Play"))
         self.TunerNote.setText(_translate("BassBot", "Note: "))
+        self.TunerOffBy.setText(_translate("BassBot", "Tuning"))
         self.metroBpmLabel.setText(_translate("BassBot", "BPM: " + str(self.metroBpmDial.value())))
         self.metroLabel.setText(_translate("BassBot", "Metronome Stopped"))
         self.metroButton.setText(_translate("BassBot", "Start/Stop"))
@@ -960,28 +1229,28 @@ class Ui_BassBot(object):
         self.label_3.setText(_translate("BassBot", "Volume"))
         self.label_4.setText(_translate("BassBot", "Metronome"))
         self.label_2.setText(_translate("BassBot", "Objective"))
+        self.TunerLabel.setText(_translate("BassBot", "Tuner"))
 
     def levelClicked(self, level):
+        #The tuner has no levels, do nothing
+        if self.exerciseRadioTuner.isChecked():
+            self.currentExercise = 0
+            return
+
         if self.exerciseRadioFrets.isChecked():
             self.currentExercise = fretFinder(level)
-            self.instructionsLabel.setText(self.currentExercise.getInstructions())
-            self.currentGoalLabel.setText(self.currentExercise.getGoal())
-            self.secondaryGoalLabel.setText(self.currentExercise.getSecondaryGoal())
-            self.currentStatusLabel.setText(self.currentExercise.getStatus())
-            self.currentExercise.set_volume(self.volumeSlider.value() / 100.0)
+
         elif self.exerciseRadioChords.isChecked():
             self.currentExercise = chordFinder(level)
-            self.instructionsLabel.setText(self.currentExercise.getInstructions())
-            self.currentGoalLabel.setText(self.currentExercise.getGoal())
-            self.secondaryGoalLabel.setText(self.currentExercise.getSecondaryGoal())
-            self.currentStatusLabel.setText(self.currentExercise.getStatus())
-            self.currentExercise.set_volume(self.volumeSlider.value() / 100.0)
+        elif self.exerciseRadioNash.isChecked():
+            self.currentExercise = nashville(level)
         else: #if self.exerciseRadioFreePlay.isChecked():
             self.currentExercise = freePlay(level)
-            self.currentExercise.set_volume(self.volumeSlider.value() / 100.0)
-            self.instructionsLabel.setText(self.currentExercise.getInstructions())
-            self.currentGoalLabel.setText(self.currentExercise.getGoal())
-            self.secondaryGoalLabel.setText(self.currentExercise.getSecondaryGoal())
+        self.instructionsLabel.setText(self.currentExercise.getInstructions())
+        self.currentGoalLabel.setText(self.currentExercise.getGoal())
+        self.secondaryGoalLabel.setText(self.currentExercise.getSecondaryGoal())
+        self.currentStatusLabel.setText(self.currentExercise.getStatus())
+        self.currentExercise.set_volume(self.volumeSlider.value() / 100.0)
 
     def exerciseClicked(self):
         if self.levelRadio1.isChecked():
@@ -994,37 +1263,50 @@ class Ui_BassBot(object):
             level = 4
         else:
             level = 1
-        if self.exerciseRadioFrets.isChecked():
-            self.currentExercise = fretFinder(level)
+        if self.exerciseRadioTuner.isChecked():
+            self.currentExercise = 0
+            self.instructionsLabel.setText("Play a note, use the tuner")
+            self.currentGoalLabel.setText("")
+            self.secondaryGoalLabel.setText("")
+            self.currentStatusLabel.setText("")
+        else:
+            if self.exerciseRadioFrets.isChecked():
+                self.currentExercise = fretFinder(level)
+                self.chordTimer.stop()
+            elif self.exerciseRadioChords.isChecked():
+                self.currentExercise = chordFinder(level)
+                self.chordTimer.stop()
+                self.metroTimer.stop()
+                self.metroIsPlaying = False
+                self.metroLabel.setText("metronome off")
+            elif self.exerciseRadioNash.isChecked():
+                self.currentExercise = nashville(level)
+            else: #if self.exerciseRadioFreePlay.isChecked():
+                self.currentExercise = freePlay(level)
+
             self.currentExercise.set_volume(self.volumeSlider.value() / 100.0)
             self.instructionsLabel.setText(self.currentExercise.getInstructions())
             self.currentGoalLabel.setText(self.currentExercise.getGoal())
             self.secondaryGoalLabel.setText(self.currentExercise.getSecondaryGoal())
-            self.chordTimer.stop()
-        elif self.exerciseRadioChords.isChecked():
-            self.currentExercise = chordFinder(level)
-            self.currentExercise.set_volume(self.volumeSlider.value() / 100.0)
-            self.instructionsLabel.setText(self.currentExercise.getInstructions())
-            self.currentGoalLabel.setText(self.currentExercise.getGoal())
-            self.secondaryGoalLabel.setText(self.currentExercise.getSecondaryGoal())
-            self.chordTimer.stop()
-        else: #if self.exerciseRadioFreePlay.isChecked():
-            self.currentExercise = freePlay(level)
-            self.currentExercise.set_volume(self.volumeSlider.value() / 100.0)
-            self.instructionsLabel.setText(self.currentExercise.getInstructions())
-            self.currentGoalLabel.setText(self.currentExercise.getGoal())
-            self.secondaryGoalLabel.setText(self.currentExercise.getSecondaryGoal())
+            self.currentStatusLabel.setText("")
 
     def volumeReleased(self):
         self.volumeChanged()
         self.rightSound.play()
 
-    def volumeChanged(self):
-        vol = self.volumeSlider.value() / 100.0
+    def setAllVolumes(self, vol):
+        self.hiClickSound.set_volume(vol)
+        self.loClickSound.set_volume(vol)
         self.clickSound.set_volume(vol)
         self.rightSound.set_volume(vol)
         self.wrongSound.set_volume(vol)
-        self.currentExercise.set_volume(vol)
+        if self.currentExercise != 0:
+            self.currentExercise.set_volume(vol)
+
+
+    def volumeChanged(self):
+        vol = self.volumeSlider.value() / 100.0
+        self.setAllVolumes(vol)
 
     def metroDialChanged(self):
         self.metroBpmLabel.setText("BPM: " + str(self.metroBpmDial.value()))
@@ -1043,18 +1325,24 @@ class Ui_BassBot(object):
             self.metroLabel.setText("metronome off")
         else:
             self.metroIsPlaying = True
+            self.beatCount = 1
             self.metroTimer.start(msDelay)
             if self.exerciseRadioFreePlay.isChecked():
                 # Eventually, this will be based on time signature and num bars
                 # The first time, subtract one to count the init click
                 self.chordTimer.start((msDelay * 4) - 1)
-            self.clickSound.play()
+            self.hiClickSound.play()
             self.metroLabel.setText("metronome on")
 
     def metroTimeout(self):
         msDelay = int(60000.0/self.metroBpmDial.value())
+        self.beatCount += 1
+        if self.beatCount == 5:
+            self.beatCount = 1
+            self.hiClickSound.play()
+        else:
+            self.loClickSound.play()
         self.metroTimer.start(msDelay)
-        self.clickSound.play()
 
     def chordTimeout(self):
         msDelay = int(60000.0/self.metroBpmDial.value())
@@ -1063,8 +1351,28 @@ class Ui_BassBot(object):
             self.currentExercise.advanceChord()
             self.secondaryGoalLabel.setText(self.currentExercise.getSecondaryGoal())
 
+    def reportTuning(self, offby):
+        tuneString = '%+.1f'%(offby*100)
+        self.TunerOffBy.setText(tuneString + " cents")
+
+        # Tuning comes in -0.5 to +0.5.  So x 100 to get from -50:50, then
+        # +50 to get from 0:100
+        tuneVal = (offby * 100) + 50
+        if tuneVal < 0:
+            tuneVal = 0
+        elif tuneVal > 100:
+            tuneVal = 100
+        self.tunerScrollBar.setProperty("value", int(tuneVal))
+        self.tunerScrollBar.setSliderPosition(int(tuneVal))
+
+
     def reportNote(self, note):
         self.TunerNote.setText("Note: " + str(note))
+
+        if note == 'none':
+            self.TunerOffBy.setText("")
+            self.tunerScrollBar.setProperty("value", 50)
+            self.tunerScrollBar.setSliderPosition(50)
 
         if self.currentExercise != 0:
             if self.currentExercise.evaluateNote(note):
@@ -1077,7 +1385,7 @@ if __name__ == "__main__":
     import sys
 
     #pygame.init()
-    mixer.init()
+    #mixer.init()
 
     app = QtWidgets.QApplication(sys.argv)
 
